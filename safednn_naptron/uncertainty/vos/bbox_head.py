@@ -4,6 +4,7 @@
 * Copyright (c) 2018-2023 OpenMMLab
 * Copyright (c) SafeDNN group 2023
 """
+
 from mmdet.models.builder import HEADS
 from mmdet.models.roi_heads import Shared2FCBBoxHead
 from mmdet.core import multiclass_nms
@@ -58,16 +59,18 @@ class VOSBBoxHead(Shared2FCBBoxHead):
         bbox_pred = self.fc_reg(x_reg) if self.with_reg else None
         return cls_score, bbox_pred
 
-    @force_fp32(apply_to=('cls_score', 'bbox_pred'))
-    def get_bboxes(self,
-                   rois,
-                   cls_score,
-                   bbox_pred,
-                   img_shape,
-                   scale_factor,
-                   rescale=False,
-                   cfg=None,
-                   ret_keep_ids=False):
+    @force_fp32(apply_to=("cls_score", "bbox_pred"))
+    def get_bboxes(
+        self,
+        rois,
+        cls_score,
+        bbox_pred,
+        img_shape,
+        scale_factor,
+        rescale=False,
+        cfg=None,
+        ret_keep_ids=False,
+    ):
         """Transform network output for a batch into bbox predictions.
         Args:
             rois (Tensor): Boxes to be transformed. Has shape (num_boxes, 5).
@@ -96,13 +99,13 @@ class VOSBBoxHead(Shared2FCBBoxHead):
         if self.custom_cls_channels:
             scores = self.loss_cls.get_activation(cls_score)
         else:
-            scores = F.softmax(
-                cls_score, dim=-1) if cls_score is not None else None
+            scores = F.softmax(cls_score, dim=-1) if cls_score is not None else None
         # bbox_pred would be None in some detector when with_reg is False,
         # e.g. Grid R-CNN.
         if bbox_pred is not None:
             bboxes = self.bbox_coder.decode(
-                rois[..., 1:], bbox_pred, max_shape=img_shape)
+                rois[..., 1:], bbox_pred, max_shape=img_shape
+            )
         else:
             bboxes = rois[:, 1:].clone()
             if img_shape is not None:
@@ -112,14 +115,20 @@ class VOSBBoxHead(Shared2FCBBoxHead):
         if rescale and bboxes.size(0) > 0:
             scale_factor = bboxes.new_tensor(scale_factor)
             bboxes = (bboxes.view(bboxes.size(0), -1, 4) / scale_factor).view(
-                bboxes.size()[0], -1)
+                bboxes.size()[0], -1
+            )
 
         if cfg is None:
             return bboxes, scores
         else:
-            det_bboxes, det_labels, keep = multiclass_nms(bboxes, scores,
-                                                          cfg.score_thr, cfg.nms,
-                                                          cfg.max_per_img, return_inds=True)
+            det_bboxes, det_labels, keep = multiclass_nms(
+                bboxes,
+                scores,
+                cfg.score_thr,
+                cfg.nms,
+                cfg.max_per_img,
+                return_inds=True,
+            )
             if ret_keep_ids:
                 num_classes = scores.size(1) - 1
                 keep = (keep / num_classes).long()

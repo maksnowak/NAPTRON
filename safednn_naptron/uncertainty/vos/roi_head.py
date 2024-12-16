@@ -4,7 +4,8 @@
 * Copyright (c) 2018-2023 OpenMMLab
 * Copyright (c) SafeDNN group 2023
 """
-from mmdet.core import (bbox2roi, bbox2result)
+
+from mmdet.core import bbox2roi, bbox2result
 from mmdet.models.builder import HEADS
 from mmdet.models.roi_heads import StandardRoIHead
 
@@ -27,18 +28,20 @@ def cat(tensors: List[torch.Tensor], dim: int = 0):
 @HEADS.register_module()
 class VOSRoiHead(StandardRoIHead):
 
-    def __init__(self,
-                 sample_number,
-                 starting_iter,
-                 bbox_roi_extractor=None,
-                 bbox_head=None,
-                 mask_roi_extractor=None,
-                 mask_head=None,
-                 shared_head=None,
-                 train_cfg=None,
-                 test_cfg=None,
-                 pretrained=None,
-                 init_cfg=None):
+    def __init__(
+        self,
+        sample_number,
+        starting_iter,
+        bbox_roi_extractor=None,
+        bbox_head=None,
+        mask_roi_extractor=None,
+        mask_head=None,
+        shared_head=None,
+        train_cfg=None,
+        test_cfg=None,
+        pretrained=None,
+        init_cfg=None,
+    ):
         super(VOSRoiHead, self).__init__(
             bbox_roi_extractor=bbox_roi_extractor,
             bbox_head=bbox_head,
@@ -48,7 +51,8 @@ class VOSRoiHead(StandardRoIHead):
             train_cfg=train_cfg,
             test_cfg=test_cfg,
             pretrained=pretrained,
-            init_cfg=init_cfg)
+            init_cfg=init_cfg,
+        )
 
         assert bbox_roi_extractor is not None
         assert bbox_head is not None
@@ -69,7 +73,7 @@ class VOSRoiHead(StandardRoIHead):
         torch.nn.init.uniform_(self.weight_energy.weight)
         self.data_dict = torch.zeros(self.num_classes, self.sample_number, 1024).cuda()
         self.number_dict = {}
-        self.eye_matrix = torch.eye(1024, device='cuda')
+        self.eye_matrix = torch.eye(1024, device="cuda")
         self.trajectory = torch.zeros((self.num_classes, 900, 3)).cuda()
         for i in range(self.num_classes):
             self.number_dict[i] = 0
@@ -81,14 +85,20 @@ class VOSRoiHead(StandardRoIHead):
         value.exp().sum(dim, keepdim).log()
         """
         import math
+
         # TODO: torch.max(value, dim=None) threw an error at time of writing
         if dim is not None:
             m, _ = torch.max(value, dim=dim, keepdim=True)
             value0 = value - m
             if keepdim is False:
                 m = m.squeeze(dim)
-            return m + torch.log(torch.sum(
-                F.relu(self.weight_energy.weight) * torch.exp(value0), dim=dim, keepdim=keepdim))
+            return m + torch.log(
+                torch.sum(
+                    F.relu(self.weight_energy.weight) * torch.exp(value0),
+                    dim=dim,
+                    keepdim=keepdim,
+                )
+            )
         else:
             m = torch.max(value)
             sum_exp = torch.sum(torch.exp(value - m))
@@ -97,15 +107,17 @@ class VOSRoiHead(StandardRoIHead):
             # else:
             return m + torch.log(sum_exp)
 
-    def forward_train(self,
-                      x,
-                      img_metas,
-                      proposal_list,
-                      gt_bboxes,
-                      gt_labels,
-                      gt_bboxes_ignore=None,
-                      gt_masks=None,
-                      **kwargs):
+    def forward_train(
+        self,
+        x,
+        img_metas,
+        proposal_list,
+        gt_bboxes,
+        gt_labels,
+        gt_bboxes_ignore=None,
+        gt_masks=None,
+        **kwargs
+    ):
         """
         Args:
             x (list[Tensor]): list of multi-level img features.
@@ -135,35 +147,35 @@ class VOSRoiHead(StandardRoIHead):
             sampling_results = []
             for i in range(num_imgs):
                 assign_result = self.bbox_assigner.assign(
-                    proposal_list[i], gt_bboxes[i], gt_bboxes_ignore[i],
-                    gt_labels[i])
+                    proposal_list[i], gt_bboxes[i], gt_bboxes_ignore[i], gt_labels[i]
+                )
                 sampling_result = self.bbox_sampler.sample(
                     assign_result,
                     proposal_list[i],
                     gt_bboxes[i],
                     gt_labels[i],
-                    feats=[lvl_feat[i][None] for lvl_feat in x])
+                    feats=[lvl_feat[i][None] for lvl_feat in x],
+                )
                 sampling_results.append(sampling_result)
 
         losses = dict()
         # bbox head forward and loss
         if self.with_bbox:
-            bbox_results = self._bbox_forward_train(x, sampling_results,
-                                                    gt_bboxes, gt_labels,
-                                                    img_metas)
-            losses.update(bbox_results['loss_bbox'])
+            bbox_results = self._bbox_forward_train(
+                x, sampling_results, gt_bboxes, gt_labels, img_metas
+            )
+            losses.update(bbox_results["loss_bbox"])
 
         # mask head forward and loss
         if self.with_mask:
-            mask_results = self._mask_forward_train(x, sampling_results,
-                                                    bbox_results['bbox_feats'],
-                                                    gt_masks, img_metas)
-            losses.update(mask_results['loss_mask'])
+            mask_results = self._mask_forward_train(
+                x, sampling_results, bbox_results["bbox_feats"], gt_masks, img_metas
+            )
+            losses.update(mask_results["loss_mask"])
 
         return losses
 
-    def _bbox_forward_train(self, x, sampling_results, gt_bboxes, gt_labels,
-                            img_metas):
+    def _bbox_forward_train(self, x, sampling_results, gt_bboxes, gt_labels, img_metas):
         """
         Run forward function and calculate loss for box head in training.
         ***SAFEDNN modification***
@@ -173,13 +185,17 @@ class VOSRoiHead(StandardRoIHead):
         rois = bbox2roi([res.bboxes for res in sampling_results])
         bbox_results = self._bbox_forward(x, rois)
 
-        scores, proposal_deltas, box_features = \
-            bbox_results["cls_score"], bbox_results["bbox_pred"], bbox_results["bbox_feats"]
+        scores, proposal_deltas, box_features = (
+            bbox_results["cls_score"],
+            bbox_results["bbox_pred"],
+            bbox_results["bbox_feats"],
+        )
 
         box_features = self.bbox_head.forward_shared(box_features)
         # parse classification outputs
-        bbox_targets = self.bbox_head.get_targets(sampling_results, gt_bboxes,
-                                                  gt_labels, self.train_cfg)
+        bbox_targets = self.bbox_head.get_targets(
+            sampling_results, gt_bboxes, gt_labels, self.train_cfg
+        )
 
         gt_classes = bbox_targets[0]
 
@@ -200,33 +216,58 @@ class VOSRoiHead(StandardRoIHead):
             for index in range(self.num_classes):
                 sum_temp += self.number_dict[index]
             lr_reg_loss = torch.zeros(1).cuda()
-            if sum_temp == self.num_classes * self.sample_number and self.curr_iteration < self.start_iter:
-                selected_fg_samples = (gt_classes != scores.shape[1] - 1).nonzero().view(-1)
+            if (
+                sum_temp == self.num_classes * self.sample_number
+                and self.curr_iteration < self.start_iter
+            ):
+                selected_fg_samples = (
+                    (gt_classes != scores.shape[1] - 1).nonzero().view(-1)
+                )
                 indices_numpy = selected_fg_samples.cpu().numpy().astype(int)
                 gt_classes_numpy = gt_classes.cpu().numpy().astype(int)
                 # maintaining an ID data queue for each class.
                 for index in indices_numpy:
                     dict_key = gt_classes_numpy[index]
-                    self.data_dict[dict_key] = torch.cat((self.data_dict[dict_key][1:],
-                                                          box_features[index].detach().view(1, -1)), 0)
-            elif sum_temp == self.num_classes * self.sample_number and self.curr_iteration >= self.start_iter:
-                selected_fg_samples = (gt_classes != scores.shape[1] - 1).nonzero().view(-1)
+                    self.data_dict[dict_key] = torch.cat(
+                        (
+                            self.data_dict[dict_key][1:],
+                            box_features[index].detach().view(1, -1),
+                        ),
+                        0,
+                    )
+            elif (
+                sum_temp == self.num_classes * self.sample_number
+                and self.curr_iteration >= self.start_iter
+            ):
+                selected_fg_samples = (
+                    (gt_classes != scores.shape[1] - 1).nonzero().view(-1)
+                )
                 indices_numpy = selected_fg_samples.cpu().numpy().astype(int)
                 gt_classes_numpy = gt_classes.cpu().numpy().astype(int)
                 # maintaining an ID data queue for each class.
                 for index in indices_numpy:
                     dict_key = gt_classes_numpy[index]
-                    self.data_dict[dict_key] = torch.cat((self.data_dict[dict_key][1:],
-                                                          box_features[index].detach().view(1, -1)), 0)
+                    self.data_dict[dict_key] = torch.cat(
+                        (
+                            self.data_dict[dict_key][1:],
+                            box_features[index].detach().view(1, -1),
+                        ),
+                        0,
+                    )
                 # the covariance finder needs the data to be centered.
                 for index in range(self.num_classes):
                     if index == 0:
                         X = self.data_dict[index] - self.data_dict[index].mean(0)
                         mean_embed_id = self.data_dict[index].mean(0).view(1, -1)
                     else:
-                        X = torch.cat((X, self.data_dict[index] - self.data_dict[index].mean(0)), 0)
-                        mean_embed_id = torch.cat((mean_embed_id,
-                                                   self.data_dict[index].mean(0).view(1, -1)), 0)
+                        X = torch.cat(
+                            (X, self.data_dict[index] - self.data_dict[index].mean(0)),
+                            0,
+                        )
+                        mean_embed_id = torch.cat(
+                            (mean_embed_id, self.data_dict[index].mean(0).view(1, -1)),
+                            0,
+                        )
 
                 # add the variance.
                 temp_precision = torch.mm(X.t(), X) / len(X)
@@ -234,30 +275,46 @@ class VOSRoiHead(StandardRoIHead):
                 temp_precision += 0.0001 * self.eye_matrix
 
                 for index in range(self.num_classes):
-                    new_dis = torch.distributions.multivariate_normal.MultivariateNormal(
-                        mean_embed_id[index], covariance_matrix=temp_precision)
+                    new_dis = (
+                        torch.distributions.multivariate_normal.MultivariateNormal(
+                            mean_embed_id[index], covariance_matrix=temp_precision
+                        )
+                    )
                     negative_samples = new_dis.rsample((self.sample_from,))
                     prob_density = new_dis.log_prob(negative_samples)
 
                     # keep the data in the low density area.
-                    cur_samples, index_prob = torch.topk(- prob_density, self.select)
+                    cur_samples, index_prob = torch.topk(-prob_density, self.select)
                     if index == 0:
                         ood_samples = negative_samples[index_prob]
                     else:
-                        ood_samples = torch.cat((ood_samples, negative_samples[index_prob]), 0)
+                        ood_samples = torch.cat(
+                            (ood_samples, negative_samples[index_prob]), 0
+                        )
                     del new_dis
                     del negative_samples
 
                 if len(ood_samples) != 0:
                     # add some gaussian noise
                     # ood_samples = self.noise(ood_samples)
-                    energy_score_for_fg = self.log_sum_exp(scores[selected_fg_samples][:, :-1], 1)
+                    energy_score_for_fg = self.log_sum_exp(
+                        scores[selected_fg_samples][:, :-1], 1
+                    )
                     predictions_ood = self.bbox_head.forward_separate(ood_samples)
-                    energy_score_for_bg = self.log_sum_exp(predictions_ood[0][:, :-1], 1)
+                    energy_score_for_bg = self.log_sum_exp(
+                        predictions_ood[0][:, :-1], 1
+                    )
 
-                    input_for_lr = torch.cat((energy_score_for_fg, energy_score_for_bg), -1)
-                    labels_for_lr = torch.cat((torch.ones(len(selected_fg_samples)).cuda(),
-                                               torch.zeros(len(ood_samples)).cuda()), -1)
+                    input_for_lr = torch.cat(
+                        (energy_score_for_fg, energy_score_for_bg), -1
+                    )
+                    labels_for_lr = torch.cat(
+                        (
+                            torch.ones(len(selected_fg_samples)).cuda(),
+                            torch.zeros(len(ood_samples)).cuda(),
+                        ),
+                        -1,
+                    )
 
                     criterion = torch.nn.CrossEntropyLoss()  # weight=weights_fg_bg)
                     output = self.logistic_regression(input_for_lr.view(-1, 1))
@@ -267,30 +324,39 @@ class VOSRoiHead(StandardRoIHead):
 
             else:
 
-                selected_fg_samples = (gt_classes != scores.shape[1] - 1).nonzero().view(-1)
+                selected_fg_samples = (
+                    (gt_classes != scores.shape[1] - 1).nonzero().view(-1)
+                )
                 indices_numpy = selected_fg_samples.cpu().numpy().astype(int)
                 gt_classes_numpy = gt_classes.cpu().numpy().astype(int)
                 for index in indices_numpy:
                     dict_key = gt_classes_numpy[index]
                     if self.number_dict[dict_key] < self.sample_number:
-                        self.data_dict[dict_key][self.number_dict[dict_key]] = box_features[index].detach()
+                        self.data_dict[dict_key][self.number_dict[dict_key]] = (
+                            box_features[index].detach()
+                        )
                         self.number_dict[dict_key] += 1
             # create a dummy in order to have all weights to get involved in for a loss.
-            loss_dummy = self.cos(self.logistic_regression(torch.zeros(1).cuda()), self.logistic_regression.bias)
-            loss_dummy1 = self.cos(self.weight_energy(torch.zeros(self.num_classes).cuda()), self.weight_energy.bias)
+            loss_dummy = self.cos(
+                self.logistic_regression(torch.zeros(1).cuda()),
+                self.logistic_regression.bias,
+            )
+            loss_dummy1 = self.cos(
+                self.weight_energy(torch.zeros(self.num_classes).cuda()),
+                self.weight_energy.bias,
+            )
             del box_features
 
-        loss_bbox = self.bbox_head.loss(bbox_results['cls_score'],
-                                        bbox_results['bbox_pred'], rois,
-                                        *bbox_targets)
+        loss_bbox = self.bbox_head.loss(
+            bbox_results["cls_score"], bbox_results["bbox_pred"], rois, *bbox_targets
+        )
         if sum_temp == self.num_classes * self.sample_number:
             losses = {
                 "loss_cls": loss_bbox["loss_cls"],
                 "lr_reg_loss": self.loss_weight * lr_reg_loss,
                 "loss_dummy": loss_dummy,
                 "loss_dummy1": loss_dummy1,
-                "loss_box_reg": loss_bbox["loss_bbox"]
-
+                "loss_box_reg": loss_bbox["loss_bbox"],
             }
         else:
             losses = {
@@ -298,18 +364,13 @@ class VOSRoiHead(StandardRoIHead):
                 "lr_reg_loss": torch.zeros(1).cuda(),
                 "loss_dummy": loss_dummy,
                 "loss_dummy1": loss_dummy1,
-                "loss_box_reg": loss_bbox["loss_bbox"]
+                "loss_box_reg": loss_bbox["loss_bbox"],
             }
 
         bbox_results.update(loss_bbox=losses)
         return bbox_results
 
-    def simple_test_bboxes(self,
-                           x,
-                           img_metas,
-                           proposals,
-                           rcnn_test_cfg,
-                           rescale=False):
+    def simple_test_bboxes(self, x, img_metas, proposals, rcnn_test_cfg, rescale=False):
         """Test only det bboxes without augmentation.
 
         Args:
@@ -341,18 +402,17 @@ class VOSRoiHead(StandardRoIHead):
             det_label = rois.new_zeros((0,), dtype=torch.long)
             if rcnn_test_cfg is None:
                 det_bbox = det_bbox[:, :4]
-                det_label = rois.new_zeros(
-                    (0, self.bbox_head.fc_cls.out_features))
+                det_label = rois.new_zeros((0, self.bbox_head.fc_cls.out_features))
             # There is no proposal in the whole batch
             return [det_bbox] * batch_size, [det_label] * batch_size
 
         bbox_results = self._bbox_forward(x, rois)
-        img_shapes = tuple(meta['img_shape'] for meta in img_metas)
-        scale_factors = tuple(meta['scale_factor'] for meta in img_metas)
+        img_shapes = tuple(meta["img_shape"] for meta in img_metas)
+        scale_factors = tuple(meta["scale_factor"] for meta in img_metas)
 
         # split batch bbox prediction back to each image
-        cls_score = bbox_results['cls_score']
-        bbox_pred = bbox_results['bbox_pred']
+        cls_score = bbox_results["cls_score"]
+        bbox_pred = bbox_results["bbox_pred"]
         num_proposals_per_img = tuple(len(p) for p in proposals)
         rois = rois.split(num_proposals_per_img, 0)
         cs_zeros = torch.zeros_like(cls_score[0])
@@ -366,7 +426,8 @@ class VOSRoiHead(StandardRoIHead):
                 bbox_pred = bbox_pred.split(num_proposals_per_img, 0)
             else:
                 bbox_pred = self.bbox_head.bbox_pred_split(
-                    bbox_pred, num_proposals_per_img)
+                    bbox_pred, num_proposals_per_img
+                )
         else:
             bbox_pred = (None,) * len(proposals)
 
@@ -382,7 +443,8 @@ class VOSRoiHead(StandardRoIHead):
                 if rcnn_test_cfg is None:
                     det_bbox = det_bbox[:, :4]
                     det_label = rois[i].new_zeros(
-                        (0, self.bbox_head.fc_cls.out_features))
+                        (0, self.bbox_head.fc_cls.out_features)
+                    )
                 cs = cs_zeros
             else:
                 det_bbox, det_label, keep = self.bbox_head.get_bboxes(
@@ -393,7 +455,8 @@ class VOSRoiHead(StandardRoIHead):
                     scale_factors[i],
                     rescale=rescale,
                     cfg=rcnn_test_cfg,
-                    ret_keep_ids=True)
+                    ret_keep_ids=True,
+                )
                 cs = cls_score[i][keep]
 
             energy_score = torch.logsumexp(cs[:, :-1], dim=1).unsqueeze(1)
@@ -402,4 +465,3 @@ class VOSRoiHead(StandardRoIHead):
             det_labels.append(det_label)
 
         return det_bboxes, det_labels
-

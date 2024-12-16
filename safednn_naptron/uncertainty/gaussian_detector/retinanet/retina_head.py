@@ -4,6 +4,7 @@
 * Copyright (c) 2018-2023 OpenMMLab
 * Copyright (c) SafeDNN group 2023
 """
+
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,6 +16,7 @@ from mmdet.models.dense_heads import RetinaHead
 from mmdet.core import images_to_levels, filter_scores_and_topk, multi_apply
 from mmdet.models import HEADS
 from mmcv.ops import batched_nms
+
 
 @HEADS.register_module()
 class GaussianRetinaHead(RetinaHead):
@@ -34,7 +36,9 @@ class GaussianRetinaHead(RetinaHead):
                     stride=1,
                     padding=1,
                     conv_cfg=self.conv_cfg,
-                    norm_cfg=self.norm_cfg))
+                    norm_cfg=self.norm_cfg,
+                )
+            )
             self.reg_convs.append(
                 ConvModule(
                     chn,
@@ -43,17 +47,30 @@ class GaussianRetinaHead(RetinaHead):
                     stride=1,
                     padding=1,
                     conv_cfg=self.conv_cfg,
-                    norm_cfg=self.norm_cfg))
+                    norm_cfg=self.norm_cfg,
+                )
+            )
         self.retina_cls = nn.Conv2d(
             self.feat_channels,
             self.num_base_priors * self.cls_out_channels,
             3,
-            padding=1)
+            padding=1,
+        )
         self.retina_reg = nn.Conv2d(
-            self.feat_channels, self.num_base_priors * 8, 3, padding=1)
+            self.feat_channels, self.num_base_priors * 8, 3, padding=1
+        )
 
-    def loss_single(self, cls_score, bbox_pred, anchors, labels, label_weights,
-                    bbox_targets, bbox_weights, num_total_samples):
+    def loss_single(
+        self,
+        cls_score,
+        bbox_pred,
+        anchors,
+        labels,
+        label_weights,
+        bbox_targets,
+        bbox_weights,
+        num_total_samples,
+    ):
         """Compute loss of a single scale level.
 
         Args:
@@ -81,10 +98,10 @@ class GaussianRetinaHead(RetinaHead):
         # classification loss
         labels = labels.reshape(-1)
         label_weights = label_weights.reshape(-1)
-        cls_score = cls_score.permute(0, 2, 3,
-                                      1).reshape(-1, self.cls_out_channels)
+        cls_score = cls_score.permute(0, 2, 3, 1).reshape(-1, self.cls_out_channels)
         loss_cls = self.loss_cls(
-            cls_score, labels, label_weights, avg_factor=num_total_samples)
+            cls_score, labels, label_weights, avg_factor=num_total_samples
+        )
         # regression loss
         bbox_targets = bbox_targets.reshape(-1, 4)
         bbox_weights = bbox_weights.reshape(-1, 4)
@@ -100,30 +117,34 @@ class GaussianRetinaHead(RetinaHead):
 
         loss_xy = self.loss_bbox(
             bbox_pred[..., :2],
-            bbox_targets[ ..., :2],
+            bbox_targets[..., :2],
             bbox_sigma[..., :2],
             weight=bbox_weights[..., :2],
-            avg_factor=num_total_samples)
+            avg_factor=num_total_samples,
+        )
         loss_wh = self.loss_bbox(
             bbox_pred[..., 2:],
-            bbox_targets[ ..., 2:],
+            bbox_targets[..., 2:],
             bbox_sigma[..., 2:],
             weight=bbox_weights[..., 2:],
-            avg_factor=num_total_samples)
+            avg_factor=num_total_samples,
+        )
         loss_bbox = loss_xy + loss_wh
 
         return loss_cls, loss_bbox
 
-    def _get_bboxes_single(self,
-                           cls_score_list,
-                           bbox_pred_list,
-                           score_factor_list,
-                           mlvl_priors,
-                           img_meta,
-                           cfg,
-                           rescale=False,
-                           with_nms=True,
-                           **kwargs):
+    def _get_bboxes_single(
+        self,
+        cls_score_list,
+        bbox_pred_list,
+        score_factor_list,
+        mlvl_priors,
+        img_meta,
+        cfg,
+        rescale=False,
+        with_nms=True,
+        **kwargs
+    ):
         """Transform outputs of a single image into bbox predictions.
 
         Args:
@@ -172,8 +193,8 @@ class GaussianRetinaHead(RetinaHead):
             with_score_factors = True
 
         cfg = self.test_cfg if cfg is None else cfg
-        img_shape = img_meta['img_shape']
-        nms_pre = cfg.get('nms_pre', -1)
+        img_shape = img_meta["img_shape"]
+        nms_pre = cfg.get("nms_pre", -1)
 
         mlvl_bboxes = []
         mlvl_scores = []
@@ -183,9 +204,9 @@ class GaussianRetinaHead(RetinaHead):
             mlvl_score_factors = []
         else:
             mlvl_score_factors = None
-        for level_idx, (cls_score, bbox_pred, score_factor, priors) in \
-                enumerate(zip(cls_score_list, bbox_pred_list,
-                              score_factor_list, mlvl_priors)):
+        for level_idx, (cls_score, bbox_pred, score_factor, priors) in enumerate(
+            zip(cls_score_list, bbox_pred_list, score_factor_list, mlvl_priors)
+        ):
 
             assert cls_score.size()[-2:] == bbox_pred.size()[-2:]
 
@@ -193,10 +214,8 @@ class GaussianRetinaHead(RetinaHead):
             bbox_pred, bbox_sigma = bbox_pred[..., :4], bbox_pred[..., 4:]
             bbox_sigma = torch.sigmoid(bbox_sigma)
             if with_score_factors:
-                score_factor = score_factor.permute(1, 2,
-                                                    0).reshape(-1).sigmoid()
-            cls_score = cls_score.permute(1, 2,
-                                          0).reshape(-1, self.cls_out_channels)
+                score_factor = score_factor.permute(1, 2, 0).reshape(-1).sigmoid()
+            cls_score = cls_score.permute(1, 2, 0).reshape(-1, self.cls_out_channels)
             if self.use_sigmoid_cls:
                 scores = cls_score.sigmoid()
             else:
@@ -212,20 +231,19 @@ class GaussianRetinaHead(RetinaHead):
             # find a slight drop in performance, you can set a larger
             # `nms_pre` than before.
             results = filter_scores_and_topk(
-                scores, cfg.score_thr, nms_pre,
-                dict(bbox_pred=bbox_pred, priors=priors))
+                scores, cfg.score_thr, nms_pre, dict(bbox_pred=bbox_pred, priors=priors)
+            )
             scores, labels, keep_idxs, filtered_results = results
 
-            bbox_pred = filtered_results['bbox_pred']
-            priors = filtered_results['priors']
+            bbox_pred = filtered_results["bbox_pred"]
+            priors = filtered_results["priors"]
 
             if with_score_factors:
                 score_factor = score_factor[keep_idxs]
 
             bbox_sigma = bbox_sigma[keep_idxs]
 
-            bboxes = self.bbox_coder.decode(
-                priors, bbox_pred, max_shape=img_shape)
+            bboxes = self.bbox_coder.decode(priors, bbox_pred, max_shape=img_shape)
 
             mlvl_bboxes.append(bboxes)
             mlvl_sigmas.append(bbox_sigma)
@@ -234,21 +252,32 @@ class GaussianRetinaHead(RetinaHead):
             if with_score_factors:
                 mlvl_score_factors.append(score_factor)
 
-        return self._bbox_post_process(mlvl_scores, mlvl_labels, mlvl_bboxes, mlvl_sigmas,
-                                       img_meta['scale_factor'], cfg, rescale,
-                                       with_nms, mlvl_score_factors, **kwargs)
+        return self._bbox_post_process(
+            mlvl_scores,
+            mlvl_labels,
+            mlvl_bboxes,
+            mlvl_sigmas,
+            img_meta["scale_factor"],
+            cfg,
+            rescale,
+            with_nms,
+            mlvl_score_factors,
+            **kwargs
+        )
 
-    def _bbox_post_process(self,
-                           mlvl_scores,
-                           mlvl_labels,
-                           mlvl_bboxes,
-                           mlvl_sigmas,
-                           scale_factor,
-                           cfg,
-                           rescale=False,
-                           with_nms=True,
-                           mlvl_score_factors=None,
-                           **kwargs):
+    def _bbox_post_process(
+        self,
+        mlvl_scores,
+        mlvl_labels,
+        mlvl_bboxes,
+        mlvl_sigmas,
+        scale_factor,
+        cfg,
+        rescale=False,
+        with_nms=True,
+        mlvl_score_factors=None,
+        **kwargs
+    ):
         """bbox post-processing method.
 
         The boxes would be rescaled to the original image scale and do
@@ -309,12 +338,13 @@ class GaussianRetinaHead(RetinaHead):
                 det_bboxes = torch.cat([mlvl_bboxes, mlvl_scores[:, None]], -1)
                 return det_bboxes, mlvl_labels
 
-            det_bboxes, keep_idxs = batched_nms(mlvl_bboxes, mlvl_scores,
-                                                mlvl_labels, cfg.nms)
-            det_bboxes = det_bboxes[:cfg.max_per_img]
-            det_labels = mlvl_labels[keep_idxs][:cfg.max_per_img]
-            det_sigmas = mlvl_sigmas[keep_idxs][:cfg.max_per_img]
-            det_bboxes[..., -1] *= (1. - det_sigmas.mean(dim=-1))
+            det_bboxes, keep_idxs = batched_nms(
+                mlvl_bboxes, mlvl_scores, mlvl_labels, cfg.nms
+            )
+            det_bboxes = det_bboxes[: cfg.max_per_img]
+            det_labels = mlvl_labels[keep_idxs][: cfg.max_per_img]
+            det_sigmas = mlvl_sigmas[keep_idxs][: cfg.max_per_img]
+            det_bboxes[..., -1] *= 1.0 - det_sigmas.mean(dim=-1)
             det_bboxes[..., -1] /= torch.max(det_bboxes[..., -1])
             return det_bboxes, det_labels
         else:

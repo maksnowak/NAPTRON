@@ -4,10 +4,12 @@
 * Copyright (c) 2018-2023 OpenMMLab
 * Copyright (c) SafeDNN group 2023
 """
+
 import torch
 
 from mmdet.utils import util_mixins
 from mmdet.core.bbox.samplers import SamplingResult
+
 
 class OWODSamplingResult(SamplingResult):
     """Bbox sampling result.
@@ -28,7 +30,16 @@ class OWODSamplingResult(SamplingResult):
         })>
     """
 
-    def __init__(self, pos_inds, neg_inds, bboxes, gt_bboxes, assign_result, gt_flags, num_classes):
+    def __init__(
+        self,
+        pos_inds,
+        neg_inds,
+        bboxes,
+        gt_bboxes,
+        assign_result,
+        gt_flags,
+        num_classes,
+    ):
         super().__init__(pos_inds, neg_inds, bboxes, gt_bboxes, assign_result, gt_flags)
         self.neg_inds = neg_inds
         self.neg_bboxes = bboxes[neg_inds]
@@ -64,5 +75,12 @@ class OWODSamplingResult(SamplingResult):
         self.pos_inds = torch.tensor(pos_inds)
         self.pos_is_gt = gt_flags[self.pos_inds]
         self.pos_bboxes = bboxes[self.pos_inds]
-        self.pos_gt_labels = torch.cat((self.pos_gt_labels, torch.tensor([num_classes - 1], device=self.pos_gt_labels.device)))
-        self.pos_gt_bboxes = torch.cat((self.pos_gt_bboxes, bboxes[max_ind].unsqueeze(0)), dim=0)
+        self.pos_gt_labels = torch.cat(
+            (
+                self.pos_gt_labels,
+                torch.tensor([num_classes - 1], device=self.pos_gt_labels.device),
+            )
+        )
+        self.pos_gt_bboxes = torch.cat(
+            (self.pos_gt_bboxes, bboxes[max_ind].unsqueeze(0)), dim=0
+        )

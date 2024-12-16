@@ -4,14 +4,16 @@
 * Copyright (c) 2018-2023 OpenMMLab
 * Copyright (c) SafeDNN group 2023
 """
+
 import torch.nn as nn
 import torch
 
 from mmdet.models.dense_heads import FCOSHead
-from mmdet.core import  filter_scores_and_topk, reduce_mean
+from mmdet.core import filter_scores_and_topk, reduce_mean
 from mmcv.runner import force_fp32
 from mmcv.ops import batched_nms
 from mmdet.models import HEADS
+
 
 @HEADS.register_module()
 class GaussianFCOSHead(FCOSHead):
@@ -19,19 +21,21 @@ class GaussianFCOSHead(FCOSHead):
     def _init_predictor(self):
         """Initialize predictor layers of the head."""
         self.conv_cls = nn.Conv2d(
-            self.feat_channels, self.cls_out_channels, 3, padding=1)
+            self.feat_channels, self.cls_out_channels, 3, padding=1
+        )
         self.conv_reg = nn.Conv2d(self.feat_channels, 8, 3, padding=1)
 
-
-    @force_fp32(apply_to=('cls_scores', 'bbox_preds', 'centernesses'))
-    def loss(self,
-             cls_scores,
-             bbox_preds,
-             centernesses,
-             gt_bboxes,
-             gt_labels,
-             img_metas,
-             gt_bboxes_ignore=None):
+    @force_fp32(apply_to=("cls_scores", "bbox_preds", "centernesses"))
+    def loss(
+        self,
+        cls_scores,
+        bbox_preds,
+        centernesses,
+        gt_bboxes,
+        gt_labels,
+        img_metas,
+        gt_bboxes_ignore=None,
+    ):
         """Compute loss of the head.
 
         Args:
@@ -57,11 +61,9 @@ class GaussianFCOSHead(FCOSHead):
         assert len(cls_scores) == len(bbox_preds) == len(centernesses)
         featmap_sizes = [featmap.size()[-2:] for featmap in cls_scores]
         all_level_points = self.prior_generator.grid_priors(
-            featmap_sizes,
-            dtype=bbox_preds[0].dtype,
-            device=bbox_preds[0].device)
-        labels, bbox_targets = self.get_targets(all_level_points, gt_bboxes,
-                                                gt_labels)
+            featmap_sizes, dtype=bbox_preds[0].dtype, device=bbox_preds[0].device
+        )
+        labels, bbox_targets = self.get_targets(all_level_points, gt_bboxes, gt_labels)
 
         num_imgs = cls_scores[0].size(0)
         # flatten cls_scores, bbox_preds and centerness
@@ -79,8 +81,7 @@ class GaussianFCOSHead(FCOSHead):
         ]
 
         flatten_centerness = [
-            centerness.permute(0, 2, 3, 1).reshape(-1)
-            for centerness in centernesses
+            centerness.permute(0, 2, 3, 1).reshape(-1) for centerness in centernesses
         ]
         flatten_cls_scores = torch.cat(flatten_cls_scores)
         flatten_bbox_preds = torch.cat(flatten_bbox_preds)
@@ -90,17 +91,21 @@ class GaussianFCOSHead(FCOSHead):
         flatten_bbox_targets = torch.cat(bbox_targets)
         # repeat points to align with bbox_preds
         flatten_points = torch.cat(
-            [points.repeat(num_imgs, 1) for points in all_level_points])
+            [points.repeat(num_imgs, 1) for points in all_level_points]
+        )
 
         # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
         bg_class_ind = self.num_classes
-        pos_inds = ((flatten_labels >= 0)
-                    & (flatten_labels < bg_class_ind)).nonzero().reshape(-1)
+        pos_inds = (
+            ((flatten_labels >= 0) & (flatten_labels < bg_class_ind))
+            .nonzero()
+            .reshape(-1)
+        )
         num_pos = torch.tensor(
-            len(pos_inds), dtype=torch.float, device=bbox_preds[0].device)
+            len(pos_inds), dtype=torch.float, device=bbox_preds[0].device
+        )
         num_pos = max(reduce_mean(num_pos), 1.0)
-        loss_cls = self.loss_cls(
-            flatten_cls_scores, flatten_labels, avg_factor=num_pos)
+        loss_cls = self.loss_cls(flatten_cls_scores, flatten_labels, avg_factor=num_pos)
 
         pos_bbox_preds = flatten_bbox_preds[pos_inds]
         pos_sigmas = flatten_sigmas[pos_inds]
@@ -110,51 +115,58 @@ class GaussianFCOSHead(FCOSHead):
         pos_centerness_targets = self.centerness_target(pos_bbox_targets)
         # centerness weighted iou loss
         centerness_denorm = max(
-            reduce_mean(pos_centerness_targets.sum().detach()), 1e-6)
+            reduce_mean(pos_centerness_targets.sum().detach()), 1e-6
+        )
 
         if len(pos_inds) > 0:
             pos_points = flatten_points[pos_inds]
-            pos_decoded_bbox_preds = self.bbox_coder.decode(
-                pos_points, pos_bbox_preds)
+            pos_decoded_bbox_preds = self.bbox_coder.decode(pos_points, pos_bbox_preds)
             pos_decoded_target_preds = self.bbox_coder.decode(
-                pos_points, pos_bbox_targets)
-            centerness_weights = pos_centerness_targets.unsqueeze(1).repeat_interleave(4, dim=1)
+                pos_points, pos_bbox_targets
+            )
+            centerness_weights = pos_centerness_targets.unsqueeze(1).repeat_interleave(
+                4, dim=1
+            )
 
             loss_xy = self.loss_bbox(
                 pos_decoded_bbox_preds[..., :2],
                 pos_decoded_target_preds[..., :2],
                 pos_sigmas[..., :2],
                 weight=centerness_weights,
-                avg_factor=centerness_denorm)
+                avg_factor=centerness_denorm,
+            )
             loss_wh = self.loss_bbox(
                 pos_decoded_bbox_preds[..., 2:],
                 pos_decoded_target_preds[..., 2:],
                 pos_sigmas[..., 2:],
                 weight=centerness_weights,
-                avg_factor=centerness_denorm)
+                avg_factor=centerness_denorm,
+            )
             loss_bbox = loss_xy + loss_wh
 
             loss_centerness = self.loss_centerness(
-                pos_centerness, pos_centerness_targets, avg_factor=num_pos)
+                pos_centerness, pos_centerness_targets, avg_factor=num_pos
+            )
         else:
             loss_bbox = pos_bbox_preds.sum()
             loss_centerness = pos_centerness.sum()
 
         return dict(
-            loss_cls=loss_cls,
-            loss_bbox=loss_bbox,
-            loss_centerness=loss_centerness)
+            loss_cls=loss_cls, loss_bbox=loss_bbox, loss_centerness=loss_centerness
+        )
 
-    def _get_bboxes_single(self,
-                           cls_score_list,
-                           bbox_pred_list,
-                           score_factor_list,
-                           mlvl_priors,
-                           img_meta,
-                           cfg,
-                           rescale=False,
-                           with_nms=True,
-                           **kwargs):
+    def _get_bboxes_single(
+        self,
+        cls_score_list,
+        bbox_pred_list,
+        score_factor_list,
+        mlvl_priors,
+        img_meta,
+        cfg,
+        rescale=False,
+        with_nms=True,
+        **kwargs
+    ):
         """Transform outputs of a single image into bbox predictions.
 
         Args:
@@ -203,8 +215,8 @@ class GaussianFCOSHead(FCOSHead):
             with_score_factors = True
 
         cfg = self.test_cfg if cfg is None else cfg
-        img_shape = img_meta['img_shape']
-        nms_pre = cfg.get('nms_pre', -1)
+        img_shape = img_meta["img_shape"]
+        nms_pre = cfg.get("nms_pre", -1)
 
         mlvl_bboxes = []
         mlvl_scores = []
@@ -214,9 +226,9 @@ class GaussianFCOSHead(FCOSHead):
             mlvl_score_factors = []
         else:
             mlvl_score_factors = None
-        for level_idx, (cls_score, bbox_pred, score_factor, priors) in \
-                enumerate(zip(cls_score_list, bbox_pred_list,
-                              score_factor_list, mlvl_priors)):
+        for level_idx, (cls_score, bbox_pred, score_factor, priors) in enumerate(
+            zip(cls_score_list, bbox_pred_list, score_factor_list, mlvl_priors)
+        ):
 
             assert cls_score.size()[-2:] == bbox_pred.size()[-2:]
 
@@ -224,10 +236,8 @@ class GaussianFCOSHead(FCOSHead):
             bbox_pred, bbox_sigma = bbox_pred[..., :4], bbox_pred[..., 4:]
             bbox_sigma = torch.sigmoid(bbox_sigma)
             if with_score_factors:
-                score_factor = score_factor.permute(1, 2,
-                                                    0).reshape(-1).sigmoid()
-            cls_score = cls_score.permute(1, 2,
-                                          0).reshape(-1, self.cls_out_channels)
+                score_factor = score_factor.permute(1, 2, 0).reshape(-1).sigmoid()
+            cls_score = cls_score.permute(1, 2, 0).reshape(-1, self.cls_out_channels)
             if self.use_sigmoid_cls:
                 scores = cls_score.sigmoid()
             else:
@@ -243,20 +253,19 @@ class GaussianFCOSHead(FCOSHead):
             # find a slight drop in performance, you can set a larger
             # `nms_pre` than before.
             results = filter_scores_and_topk(
-                scores, cfg.score_thr, nms_pre,
-                dict(bbox_pred=bbox_pred, priors=priors))
+                scores, cfg.score_thr, nms_pre, dict(bbox_pred=bbox_pred, priors=priors)
+            )
             scores, labels, keep_idxs, filtered_results = results
 
-            bbox_pred = filtered_results['bbox_pred']
-            priors = filtered_results['priors']
+            bbox_pred = filtered_results["bbox_pred"]
+            priors = filtered_results["priors"]
 
             if with_score_factors:
                 score_factor = score_factor[keep_idxs]
 
             bbox_sigma = bbox_sigma[keep_idxs]
 
-            bboxes = self.bbox_coder.decode(
-                priors, bbox_pred, max_shape=img_shape)
+            bboxes = self.bbox_coder.decode(priors, bbox_pred, max_shape=img_shape)
 
             mlvl_bboxes.append(bboxes)
             mlvl_sigmas.append(bbox_sigma)
@@ -265,21 +274,32 @@ class GaussianFCOSHead(FCOSHead):
             if with_score_factors:
                 mlvl_score_factors.append(score_factor)
 
-        return self._bbox_post_process(mlvl_scores, mlvl_labels, mlvl_bboxes, mlvl_sigmas,
-                                       img_meta['scale_factor'], cfg, rescale,
-                                       with_nms, mlvl_score_factors, **kwargs)
+        return self._bbox_post_process(
+            mlvl_scores,
+            mlvl_labels,
+            mlvl_bboxes,
+            mlvl_sigmas,
+            img_meta["scale_factor"],
+            cfg,
+            rescale,
+            with_nms,
+            mlvl_score_factors,
+            **kwargs
+        )
 
-    def _bbox_post_process(self,
-                           mlvl_scores,
-                           mlvl_labels,
-                           mlvl_bboxes,
-                           mlvl_sigmas,
-                           scale_factor,
-                           cfg,
-                           rescale=False,
-                           with_nms=True,
-                           mlvl_score_factors=None,
-                           **kwargs):
+    def _bbox_post_process(
+        self,
+        mlvl_scores,
+        mlvl_labels,
+        mlvl_bboxes,
+        mlvl_sigmas,
+        scale_factor,
+        cfg,
+        rescale=False,
+        with_nms=True,
+        mlvl_score_factors=None,
+        **kwargs
+    ):
         """bbox post-processing method.
 
         The boxes would be rescaled to the original image scale and do
@@ -340,12 +360,13 @@ class GaussianFCOSHead(FCOSHead):
                 det_bboxes = torch.cat([mlvl_bboxes, mlvl_scores[:, None]], -1)
                 return det_bboxes, mlvl_labels
 
-            det_bboxes, keep_idxs = batched_nms(mlvl_bboxes, mlvl_scores,
-                                                mlvl_labels, cfg.nms)
-            det_bboxes = det_bboxes[:cfg.max_per_img]
-            det_labels = mlvl_labels[keep_idxs][:cfg.max_per_img]
-            det_sigmas = mlvl_sigmas[keep_idxs][:cfg.max_per_img]
-            det_bboxes[..., -1] *= (1. - det_sigmas.mean(dim=-1))
+            det_bboxes, keep_idxs = batched_nms(
+                mlvl_bboxes, mlvl_scores, mlvl_labels, cfg.nms
+            )
+            det_bboxes = det_bboxes[: cfg.max_per_img]
+            det_labels = mlvl_labels[keep_idxs][: cfg.max_per_img]
+            det_sigmas = mlvl_sigmas[keep_idxs][: cfg.max_per_img]
+            det_bboxes[..., -1] *= 1.0 - det_sigmas.mean(dim=-1)
             det_bboxes[..., -1] /= torch.max(det_bboxes[..., -1])
             return det_bboxes, det_labels
         else:

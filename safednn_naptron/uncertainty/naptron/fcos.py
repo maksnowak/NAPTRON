@@ -4,6 +4,7 @@
 * Copyright (c) 2018-2023 OpenMMLab
 * Copyright (c) SafeDNN group 2023
 """
+
 from mmdet.models.builder import DETECTORS
 from mmdet.core import bbox2result
 from mmdet.models.detectors import FCOS
@@ -27,10 +28,7 @@ class NAPTRONFCOS(FCOS):
                 corresponds to each class.
         """
         feat = self.extract_feat(img)
-        ret = self.bbox_head.simple_test(
-            feat, img_metas, rescale=rescale)
+        ret = self.bbox_head.simple_test(feat, img_metas, rescale=rescale)
         det_bboxes, det_labels, det_nap, nap_shapes = ret[0]
-        bbox_results = [
-            bbox2result(det_bboxes, det_labels, self.bbox_head.num_classes)
-        ]
+        bbox_results = [bbox2result(det_bboxes, det_labels, self.bbox_head.num_classes)]
         return bbox_results, det_nap, nap_shapes, det_labels

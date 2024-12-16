@@ -4,6 +4,7 @@
 * Copyright (c) 2018-2023 OpenMMLab
 * Copyright (c) SafeDNN group 2023
 """
+
 from mmdet.models.dense_heads import FCOSHead
 from mmdet.models import HEADS
 from mmdet.core import multi_apply, filter_scores_and_topk, select_single_mlvl
@@ -18,10 +19,14 @@ import torch.nn as nn
 @HEADS.register_module()
 class MCDFCOSHead(FCOSHead):
 
-    def __init__(self, dropout_rates=(0., 0., 0., 0., 0.1), num_forward_passes=20, *args, **kwargs):
-        super(MCDFCOSHead, self).__init__(
-            *args,
-            **kwargs)
+    def __init__(
+        self,
+        dropout_rates=(0.0, 0.0, 0.0, 0.0, 0.1),
+        num_forward_passes=20,
+        *args,
+        **kwargs
+    ):
+        super(MCDFCOSHead, self).__init__(*args, **kwargs)
         self.dropouts = [nn.Dropout2d(d) for d in dropout_rates]
         for d in self.dropouts:
             d.train()
@@ -112,12 +117,24 @@ class MCDFCOSHead(FCOSHead):
 
         cls_scores, bbox_preds, centerness = self.forward(feats)
 
-        cls_scores_mcd = [torch.zeros_like(cls_score).unsqueeze(0).repeat_interleave(self.num_forward_passes, dim=0) for
-                          cls_score in cls_scores]
-        bbox_preds_mcd = [torch.zeros_like(bbox_pred).unsqueeze(0).repeat_interleave(self.num_forward_passes, dim=0) for
-                          bbox_pred in bbox_preds]
-        centerness_mcd = [torch.zeros_like(c).unsqueeze(0).repeat_interleave(self.num_forward_passes, dim=0) for
-                          c in centerness]
+        cls_scores_mcd = [
+            torch.zeros_like(cls_score)
+            .unsqueeze(0)
+            .repeat_interleave(self.num_forward_passes, dim=0)
+            for cls_score in cls_scores
+        ]
+        bbox_preds_mcd = [
+            torch.zeros_like(bbox_pred)
+            .unsqueeze(0)
+            .repeat_interleave(self.num_forward_passes, dim=0)
+            for bbox_pred in bbox_preds
+        ]
+        centerness_mcd = [
+            torch.zeros_like(c)
+            .unsqueeze(0)
+            .repeat_interleave(self.num_forward_passes, dim=0)
+            for c in centerness
+        ]
         for i in range(self.num_forward_passes):
             cls_scores, bbox_preds, centerness = self.forward(feats)
             for j in range(len(cls_scores)):
@@ -125,11 +142,18 @@ class MCDFCOSHead(FCOSHead):
                 bbox_preds_mcd[j][i] = bbox_preds[j]
                 centerness_mcd[j][i] = centerness[j]
 
-        cls_scores, bbox_preds, centerness, label_uncertainty = self.mcd_uncertainty(cls_scores_mcd, bbox_preds_mcd,
-                                                                                       centerness_mcd)
+        cls_scores, bbox_preds, centerness, label_uncertainty = self.mcd_uncertainty(
+            cls_scores_mcd, bbox_preds_mcd, centerness_mcd
+        )
 
         results_list = self.get_bboxes(
-            cls_scores, bbox_preds, label_uncertainty, centerness, img_metas=img_metas, rescale=rescale)
+            cls_scores,
+            bbox_preds,
+            label_uncertainty,
+            centerness,
+            img_metas=img_metas,
+            rescale=rescale,
+        )
         return results_list
 
     def mcd_uncertainty(self, cls_scores, bbox_preds, centerness):
@@ -144,22 +168,26 @@ class MCDFCOSHead(FCOSHead):
             mean_centerness.append(centerness[i].mean(dim=0))
 
             u = cls_scores[i].softmax(dim=-1).std(dim=0)  # std
-            u = u.permute(0, 2, 3, 1).reshape((cls_scores[i].shape[1], -1, self.cls_out_channels))
+            u = u.permute(0, 2, 3, 1).reshape(
+                (cls_scores[i].shape[1], -1, self.cls_out_channels)
+            )
             uncertainty.append(-u.mean(dim=-1))
 
         return mean_cls_score, mean_bbox_pred, mean_centerness, uncertainty
 
-    @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
-    def get_bboxes(self,
-                   cls_scores,
-                   bbox_preds,
-                   uncertainty,
-                   score_factors=None,
-                   img_metas=None,
-                   cfg=None,
-                   rescale=False,
-                   with_nms=True,
-                   **kwargs):
+    @force_fp32(apply_to=("cls_scores", "bbox_preds"))
+    def get_bboxes(
+        self,
+        cls_scores,
+        bbox_preds,
+        uncertainty,
+        score_factors=None,
+        img_metas=None,
+        cfg=None,
+        rescale=False,
+        with_nms=True,
+        **kwargs
+    ):
         """Transform network outputs of a batch into bbox results.
 
         Note: When score_factors is not None, the cls_scores are
@@ -206,9 +234,8 @@ class MCDFCOSHead(FCOSHead):
 
         featmap_sizes = [cls_scores[i].shape[-2:] for i in range(num_levels)]
         mlvl_priors = self.prior_generator.grid_priors(
-            featmap_sizes,
-            dtype=cls_scores[0].dtype,
-            device=cls_scores[0].device)
+            featmap_sizes, dtype=cls_scores[0].dtype, device=cls_scores[0].device
+        )
 
         result_list = []
 
@@ -222,24 +249,34 @@ class MCDFCOSHead(FCOSHead):
             else:
                 score_factor_list = [None for _ in range(num_levels)]
 
-            results = self._get_bboxes_single(cls_score_list, bbox_pred_list,
-                                              score_factor_list, mlvl_priors, uncertainty_list,
-                                              img_meta, cfg, rescale, with_nms,
-                                              **kwargs)
+            results = self._get_bboxes_single(
+                cls_score_list,
+                bbox_pred_list,
+                score_factor_list,
+                mlvl_priors,
+                uncertainty_list,
+                img_meta,
+                cfg,
+                rescale,
+                with_nms,
+                **kwargs
+            )
             result_list.append(results)
         return result_list
 
-    def _get_bboxes_single(self,
-                           cls_score_list,
-                           bbox_pred_list,
-                           score_factor_list,
-                           mlvl_priors,
-                           uncertainty_list,
-                           img_meta,
-                           cfg,
-                           rescale=False,
-                           with_nms=True,
-                           **kwargs):
+    def _get_bboxes_single(
+        self,
+        cls_score_list,
+        bbox_pred_list,
+        score_factor_list,
+        mlvl_priors,
+        uncertainty_list,
+        img_meta,
+        cfg,
+        rescale=False,
+        with_nms=True,
+        **kwargs
+    ):
         """Transform outputs of a single image into bbox predictions.
 
         Args:
@@ -288,8 +325,8 @@ class MCDFCOSHead(FCOSHead):
             with_score_factors = True
 
         cfg = self.test_cfg if cfg is None else cfg
-        img_shape = img_meta['img_shape']
-        nms_pre = cfg.get('nms_pre', -1)
+        img_shape = img_meta["img_shape"]
+        nms_pre = cfg.get("nms_pre", -1)
 
         mlvl_bboxes = []
         mlvl_scores = []
@@ -299,18 +336,28 @@ class MCDFCOSHead(FCOSHead):
             mlvl_score_factors = []
         else:
             mlvl_score_factors = None
-        for level_idx, (cls_score, bbox_pred, score_factor, priors, uncertainty) in \
-                enumerate(zip(cls_score_list, bbox_pred_list,
-                              score_factor_list, mlvl_priors, uncertainty_list)):
+        for level_idx, (
+            cls_score,
+            bbox_pred,
+            score_factor,
+            priors,
+            uncertainty,
+        ) in enumerate(
+            zip(
+                cls_score_list,
+                bbox_pred_list,
+                score_factor_list,
+                mlvl_priors,
+                uncertainty_list,
+            )
+        ):
 
             assert cls_score.size()[-2:] == bbox_pred.size()[-2:]
 
             bbox_pred = bbox_pred.permute(1, 2, 0).reshape(-1, 4)
             if with_score_factors:
-                score_factor = score_factor.permute(1, 2,
-                                                    0).reshape(-1).sigmoid()
-            cls_score = cls_score.permute(1, 2,
-                                          0).reshape(-1, self.cls_out_channels)
+                score_factor = score_factor.permute(1, 2, 0).reshape(-1).sigmoid()
+            cls_score = cls_score.permute(1, 2, 0).reshape(-1, self.cls_out_channels)
             if self.use_sigmoid_cls:
                 scores = cls_score.sigmoid()
             else:
@@ -325,20 +372,19 @@ class MCDFCOSHead(FCOSHead):
             # find a slight drop in performance, you can set a larger
             # `nms_pre` than before.
             results = filter_scores_and_topk(
-                scores, cfg.score_thr, nms_pre,
-                dict(bbox_pred=bbox_pred, priors=priors))
+                scores, cfg.score_thr, nms_pre, dict(bbox_pred=bbox_pred, priors=priors)
+            )
             scores, labels, keep_idxs, filtered_results = results
 
             uncertainty = uncertainty[keep_idxs]
 
-            bbox_pred = filtered_results['bbox_pred']
-            priors = filtered_results['priors']
+            bbox_pred = filtered_results["bbox_pred"]
+            priors = filtered_results["priors"]
 
             if with_score_factors:
                 score_factor = score_factor[keep_idxs]
 
-            bboxes = self.bbox_coder.decode(
-                priors, bbox_pred, max_shape=img_shape)
+            bboxes = self.bbox_coder.decode(priors, bbox_pred, max_shape=img_shape)
 
             mlvl_bboxes.append(bboxes)
             mlvl_scores.append(scores)
@@ -347,21 +393,32 @@ class MCDFCOSHead(FCOSHead):
             if with_score_factors:
                 mlvl_score_factors.append(score_factor)
 
-        return self._bbox_post_process(mlvl_scores, mlvl_labels, mlvl_bboxes, mlvl_uncertainty,
-                                       img_meta['scale_factor'], cfg, rescale,
-                                       with_nms, mlvl_score_factors, **kwargs)
+        return self._bbox_post_process(
+            mlvl_scores,
+            mlvl_labels,
+            mlvl_bboxes,
+            mlvl_uncertainty,
+            img_meta["scale_factor"],
+            cfg,
+            rescale,
+            with_nms,
+            mlvl_score_factors,
+            **kwargs
+        )
 
-    def _bbox_post_process(self,
-                           mlvl_scores,
-                           mlvl_labels,
-                           mlvl_bboxes,
-                           mlvl_uncertainty,
-                           scale_factor,
-                           cfg,
-                           rescale=False,
-                           with_nms=True,
-                           mlvl_score_factors=None,
-                           **kwargs):
+    def _bbox_post_process(
+        self,
+        mlvl_scores,
+        mlvl_labels,
+        mlvl_bboxes,
+        mlvl_uncertainty,
+        scale_factor,
+        cfg,
+        rescale=False,
+        with_nms=True,
+        mlvl_score_factors=None,
+        **kwargs
+    ):
         """bbox post-processing method.
 
         The boxes would be rescaled to the original image scale and do
@@ -402,7 +459,12 @@ class MCDFCOSHead(FCOSHead):
                 - det_labels (Tensor): Predicted labels of the corresponding \
                     box with shape [num_bboxes].
         """
-        assert len(mlvl_scores) == len(mlvl_bboxes) == len(mlvl_labels) == len(mlvl_uncertainty)
+        assert (
+            len(mlvl_scores)
+            == len(mlvl_bboxes)
+            == len(mlvl_labels)
+            == len(mlvl_uncertainty)
+        )
 
         mlvl_bboxes = torch.cat(mlvl_bboxes)
         if rescale:
@@ -422,11 +484,12 @@ class MCDFCOSHead(FCOSHead):
                 det_bboxes = torch.cat([mlvl_bboxes, mlvl_scores[:, None]], -1)
                 return det_bboxes, mlvl_labels
 
-            det_bboxes, keep_idxs = batched_nms(mlvl_bboxes, mlvl_scores,
-                                                mlvl_labels, cfg.nms)
-            det_bboxes = det_bboxes[:cfg.max_per_img]
-            det_labels = mlvl_labels[keep_idxs][:cfg.max_per_img]
-            det_uncertainty = mlvl_uncertainty[keep_idxs][:cfg.max_per_img]
+            det_bboxes, keep_idxs = batched_nms(
+                mlvl_bboxes, mlvl_scores, mlvl_labels, cfg.nms
+            )
+            det_bboxes = det_bboxes[: cfg.max_per_img]
+            det_labels = mlvl_labels[keep_idxs][: cfg.max_per_img]
+            det_uncertainty = mlvl_uncertainty[keep_idxs][: cfg.max_per_img]
             det_bboxes = torch.cat((det_bboxes, det_uncertainty.reshape(-1, 1)), 1)
             return det_bboxes, det_labels
         else:
