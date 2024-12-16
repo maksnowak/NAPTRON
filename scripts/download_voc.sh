@@ -9,6 +9,7 @@ echo "chosen destination path: ${destination_path} "
 
 cd ${destination_path}
 
-/bin/bash ../scripts/gdrive_download2.sh 1n9C4CiBURMSCZy2LStBQTzR17rD_a67e voc_07_12.zip
+# /bin/bash ../scripts/gdrive_download2.sh 1n9C4CiBURMSCZy2LStBQTzR17rD_a67e voc_07_12.zip
+gdown --id 1n9C4CiBURMSCZy2LStBQTzR17rD_a67e -O voc_07_12.zip
 unzip voc_07_12.zip
 rm voc_07_12.zip
