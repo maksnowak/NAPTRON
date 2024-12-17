@@ -95,8 +95,8 @@ def prepare_nap_monitor(args):
     train_cfg = mmcv.Config.fromfile(args.train_config)
     custom_imports = dict(
         imports=[
-            "safednn.uncertainty.coco_eval_ood",
-            "safednn.uncertainty.coco_ood_dataset",
+            "safednn_naptron.uncertainty.coco_eval_ood",
+            "safednn_naptron.uncertainty.coco_ood_dataset",
         ],
         allow_failed_imports=False,
     )

@@ -20,7 +20,7 @@ from terminaltables import AsciiTable
 from mmdet.datasets import CocoDataset, DATASETS
 from mmdet.datasets.api_wrappers import COCO
 from .coco_eval_ood import CocoEvalOOD
-from safednn.utils.metrics import auroc, fpr_at_95_tpr
+from safednn_naptron.utils.metrics import auroc, fpr_at_95_tpr
 
 
 @DATASETS.register_module()

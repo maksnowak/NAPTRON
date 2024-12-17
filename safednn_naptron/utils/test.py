@@ -24,7 +24,7 @@ from mmdet.datasets import build_dataloader, build_dataset, replace_ImageToTenso
 from mmdet.models import build_detector
 from mmdet.utils import setup_multi_processes, update_data_root
 from mmdet.core import encode_mask_results
-from safednn.model_output.builder import build_output_handler
+from safednn_naptron.model_output.builder import build_output_handler
 
 
 def parse_args():
