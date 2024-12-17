@@ -9,14 +9,26 @@ import sklearn.mixture as sm
 import numpy as np
 
 
-def fit_gmms(logits, labels, ious, confs, scoreThresh, iouThresh, num_classes, components=1, covariance_type='full'):
+def fit_gmms(
+    logits,
+    labels,
+    ious,
+    confs,
+    scoreThresh,
+    iouThresh,
+    num_classes,
+    components=1,
+    covariance_type="full",
+):
     gmms = [None for i in range(num_classes)]
     for i in range(num_classes):
         ls = logits[labels == i]
         iou = ious[labels == i]
         conf = confs[labels == i]
 
-        if len(ls) < components + 2:  # no objects from this class were detected, or not enough given the components number
+        if (
+            len(ls) < components + 2
+        ):  # no objects from this class were detected, or not enough given the components number
             continue
 
         # mask for high iou and high conf
@@ -27,8 +39,13 @@ def fit_gmms(logits, labels, ious, confs, scoreThresh, iouThresh, num_classes, c
         if len(lsThresh) < components + 2:
             lsThresh = ls
 
-        gmms[i] = sm.GaussianMixture(n_components=components, random_state=0, max_iter=200, n_init=2,
-                                     covariance_type=covariance_type).fit(lsThresh)
+        gmms[i] = sm.GaussianMixture(
+            n_components=components,
+            random_state=0,
+            max_iter=200,
+            n_init=2,
+            covariance_type=covariance_type,
+        ).fit(lsThresh)
 
     return gmms
 

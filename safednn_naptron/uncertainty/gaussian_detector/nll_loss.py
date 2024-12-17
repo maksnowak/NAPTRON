@@ -4,6 +4,7 @@
 * Copyright (c) 2018-2023 OpenMMLab
 * Copyright (c) SafeDNN group 2023
 """
+
 import mmcv
 import torch
 import torch.nn as nn
@@ -36,8 +37,7 @@ def nll_loss(pred, target, sigma):
 
 
 def _gaussian_dist_pdf(val, mean, var):
-    return torch.exp(- (val - mean) ** 2.0 / var / 2.0) / torch.sqrt(2.0 * np.pi * var)
-
+    return torch.exp(-((val - mean) ** 2.0) / var / 2.0) / torch.sqrt(2.0 * np.pi * var)
 
 
 @LOSSES.register_module()
@@ -52,18 +52,14 @@ class NLLLoss(nn.Module):
         loss_weight (float, optional): The weight of loss.
     """
 
-    def __init__(self, reduction='mean', loss_weight=1.0, **kwargs):
+    def __init__(self, reduction="mean", loss_weight=1.0, **kwargs):
         super(NLLLoss, self).__init__()
         self.reduction = reduction
         self.loss_weight = loss_weight
 
-    def forward(self,
-                pred,
-                target,
-                sigma,
-                weight=None,
-                avg_factor=None,
-                reduction_override=None):
+    def forward(
+        self, pred, target, sigma, weight=None, avg_factor=None, reduction_override=None
+    ):
         """Forward function.
 
         Args:
@@ -77,14 +73,14 @@ class NLLLoss(nn.Module):
                 override the original reduction method of the loss.
                 Defaults to None.
         """
-        assert reduction_override in (None, 'none', 'mean', 'sum')
-        reduction = (
-            reduction_override if reduction_override else self.reduction)
+        assert reduction_override in (None, "none", "mean", "sum")
+        reduction = reduction_override if reduction_override else self.reduction
         loss_bbox = self.loss_weight * nll_loss(
             pred,
             target,
             sigma=sigma,
             weight=weight,
             reduction=reduction,
-            avg_factor=avg_factor)
+            avg_factor=avg_factor,
+        )
         return loss_bbox

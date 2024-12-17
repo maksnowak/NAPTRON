@@ -4,6 +4,7 @@
 * Copyright (c) 2018-2023 OpenMMLab
 * Copyright (c) SafeDNN group 2023
 """
+
 from mmdet.core import bbox2result, bbox2roi
 from mmdet.models.builder import HEADS
 from mmdet.models.roi_heads import StandardRoIHead
@@ -17,12 +18,7 @@ from typing import List
 @HEADS.register_module()
 class EnergyRoiHead(StandardRoIHead):
 
-    def simple_test_bboxes(self,
-                           x,
-                           img_metas,
-                           proposals,
-                           rcnn_test_cfg,
-                           rescale=False):
+    def simple_test_bboxes(self, x, img_metas, proposals, rcnn_test_cfg, rescale=False):
         """Test only det bboxes without augmentation.
 
         Args:
@@ -54,18 +50,17 @@ class EnergyRoiHead(StandardRoIHead):
             det_label = rois.new_zeros((0,), dtype=torch.long)
             if rcnn_test_cfg is None:
                 det_bbox = det_bbox[:, :4]
-                det_label = rois.new_zeros(
-                    (0, self.bbox_head.fc_cls.out_features))
+                det_label = rois.new_zeros((0, self.bbox_head.fc_cls.out_features))
             # There is no proposal in the whole batch
             return [det_bbox] * batch_size, [det_label] * batch_size
 
         bbox_results = self._bbox_forward(x, rois)
-        img_shapes = tuple(meta['img_shape'] for meta in img_metas)
-        scale_factors = tuple(meta['scale_factor'] for meta in img_metas)
+        img_shapes = tuple(meta["img_shape"] for meta in img_metas)
+        scale_factors = tuple(meta["scale_factor"] for meta in img_metas)
 
         # split batch bbox prediction back to each image
-        cls_score = bbox_results['cls_score']
-        bbox_pred = bbox_results['bbox_pred']
+        cls_score = bbox_results["cls_score"]
+        bbox_pred = bbox_results["bbox_pred"]
         num_proposals_per_img = tuple(len(p) for p in proposals)
         rois = rois.split(num_proposals_per_img, 0)
         # obj_scores = F.softmax(cls_score, dim=-1)[..., -1]
@@ -86,7 +81,8 @@ class EnergyRoiHead(StandardRoIHead):
                 bbox_pred = bbox_pred.split(num_proposals_per_img, 0)
             else:
                 bbox_pred = self.bbox_head.bbox_pred_split(
-                    bbox_pred, num_proposals_per_img)
+                    bbox_pred, num_proposals_per_img
+                )
         else:
             bbox_pred = (None,) * len(proposals)
 
@@ -102,7 +98,8 @@ class EnergyRoiHead(StandardRoIHead):
                 if rcnn_test_cfg is None:
                     det_bbox = det_bbox[:, :4]
                     det_label = rois[i].new_zeros(
-                        (0, self.bbox_head.fc_cls.out_features))
+                        (0, self.bbox_head.fc_cls.out_features)
+                    )
                 cs = rois[i].new_zeros(0, 1)
             else:
                 det_bbox, det_label, keep = self.bbox_head.get_bboxes(
@@ -113,7 +110,8 @@ class EnergyRoiHead(StandardRoIHead):
                     scale_factors[i],
                     rescale=rescale,
                     cfg=rcnn_test_cfg,
-                    ret_keep_ids=True)
+                    ret_keep_ids=True,
+                )
                 cs = energy_scores[i][keep].unsqueeze(1)
                 det_bbox = torch.cat((det_bbox, cs), 1)
             det_bboxes.append(det_bbox)

@@ -4,6 +4,7 @@
 * Copyright (c) 2018-2023 OpenMMLab
 * Copyright (c) SafeDNN group 2023
 """
+
 from mmdet.models.builder import HEADS
 from mmdet.models.roi_heads import ConvFCBBoxHead
 from mmdet.core import multiclass_nms
@@ -18,7 +19,9 @@ import fvcore.nn.weight_init as weight_init
 @HEADS.register_module()
 class ODBBoxHead(ConvFCBBoxHead):
 
-    def __init__(self, fc_out_channels=1024, scale=20, ic_loss_out_dim=128, *args, **kwargs):
+    def __init__(
+        self, fc_out_channels=1024, scale=20, ic_loss_out_dim=128, *args, **kwargs
+    ):
         super(ODBBoxHead, self).__init__(
             num_shared_convs=0,
             num_shared_fcs=0,
@@ -28,10 +31,10 @@ class ODBBoxHead(ConvFCBBoxHead):
             num_reg_fcs=2,
             fc_out_channels=fc_out_channels,
             *args,
-            **kwargs)
+            **kwargs
+        )
         self.scale = scale
         self.encoder = MLP(self.fc_cls.in_features, ic_loss_out_dim)
-
 
     def forward(self, x):
         # shared part
@@ -75,13 +78,11 @@ class ODBBoxHead(ConvFCBBoxHead):
         # normalize weight
         temp_norm = (
             torch.norm(self.fc_cls.weight.data, p=2, dim=1)
-                .unsqueeze(1)
-                .expand_as(self.fc_cls.weight.data)
+            .unsqueeze(1)
+            .expand_as(self.fc_cls.weight.data)
         )
 
-        self.fc_cls.weight.data = self.fc_cls.weight.data.div(
-            temp_norm + 1e-5
-        )
+        self.fc_cls.weight.data = self.fc_cls.weight.data.div(temp_norm + 1e-5)
         cos_dist = self.fc_cls(x_normalized)
         scores = self.scale * cos_dist
         # encode feature with MLP
@@ -90,16 +91,18 @@ class ODBBoxHead(ConvFCBBoxHead):
         bbox_pred = self.fc_reg(x_reg) if self.with_reg else None
         return scores, bbox_pred, mlp_feat
 
-    @force_fp32(apply_to=('cls_score', 'bbox_pred'))
-    def get_bboxes(self,
-                   rois,
-                   cls_score,
-                   bbox_pred,
-                   img_shape,
-                   scale_factor,
-                   rescale=False,
-                   cfg=None,
-                   ret_keep_ids=False):
+    @force_fp32(apply_to=("cls_score", "bbox_pred"))
+    def get_bboxes(
+        self,
+        rois,
+        cls_score,
+        bbox_pred,
+        img_shape,
+        scale_factor,
+        rescale=False,
+        cfg=None,
+        ret_keep_ids=False,
+    ):
         """Transform network output for a batch into bbox predictions.
         Args:
             rois (Tensor): Boxes to be transformed. Has shape (num_boxes, 5).
@@ -128,13 +131,13 @@ class ODBBoxHead(ConvFCBBoxHead):
         if self.custom_cls_channels:
             scores = self.loss_cls.get_activation(cls_score)
         else:
-            scores = F.softmax(
-                cls_score, dim=-1) if cls_score is not None else None
+            scores = F.softmax(cls_score, dim=-1) if cls_score is not None else None
         # bbox_pred would be None in some detector when with_reg is False,
         # e.g. Grid R-CNN.
         if bbox_pred is not None:
             bboxes = self.bbox_coder.decode(
-                rois[..., 1:], bbox_pred, max_shape=img_shape)
+                rois[..., 1:], bbox_pred, max_shape=img_shape
+            )
         else:
             bboxes = rois[:, 1:].clone()
             if img_shape is not None:
@@ -144,20 +147,27 @@ class ODBBoxHead(ConvFCBBoxHead):
         if rescale and bboxes.size(0) > 0:
             scale_factor = bboxes.new_tensor(scale_factor)
             bboxes = (bboxes.view(bboxes.size(0), -1, 4) / scale_factor).view(
-                bboxes.size()[0], -1)
+                bboxes.size()[0], -1
+            )
 
         if cfg is None:
             return bboxes, scores
         else:
-            det_bboxes, det_labels, keep = multiclass_nms(bboxes, scores,
-                                                          cfg.score_thr, cfg.nms,
-                                                          cfg.max_per_img, return_inds=True)
+            det_bboxes, det_labels, keep = multiclass_nms(
+                bboxes,
+                scores,
+                cfg.score_thr,
+                cfg.nms,
+                cfg.max_per_img,
+                return_inds=True,
+            )
             if ret_keep_ids:
                 num_classes = scores.size(1) - 1
                 keep = (keep / num_classes).long()
                 return det_bboxes, det_labels, keep
             else:
                 return det_bboxes, det_labels
+
 
 class MLP(nn.Module):
     def __init__(self, in_dim, out_dim, hidden_dim=None):

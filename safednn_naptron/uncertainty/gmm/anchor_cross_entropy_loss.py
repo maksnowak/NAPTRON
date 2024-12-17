@@ -7,6 +7,7 @@
 * Copyright (c) 2018-2023 OpenMMLab
 * Copyright (c) SafeDNN group 2023
 """
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,14 +16,17 @@ from mmdet.models import LOSSES
 from mmdet.models.losses.utils import weight_reduce_loss
 
 
-def anchor_cross_entropy(distances, logits,
-                  label,
-                  weight=None,
-                  anchor_weight = 0.1,
-                  num_classes = 15,
-                  reduction='mean',
-                  avg_factor=None,
-                  class_weight=None):
+def anchor_cross_entropy(
+    distances,
+    logits,
+    label,
+    weight=None,
+    anchor_weight=0.1,
+    num_classes=15,
+    reduction="mean",
+    avg_factor=None,
+    class_weight=None,
+):
     """Calculate the CrossEntropy loss.
 
     Args:
@@ -39,35 +43,36 @@ def anchor_cross_entropy(distances, logits,
         torch.Tensor: The calculated loss
     """
     # element-wise losses
-    lossCE = F.cross_entropy(logits, label, weight=class_weight, reduction='none')
+    lossCE = F.cross_entropy(logits, label, weight=class_weight, reduction="none")
 
     # apply weights and do the reduction
     if weight is not None:
         weight = weight.float()
     lossCE = weight_reduce_loss(
-        lossCE, weight=weight, reduction=reduction, avg_factor=avg_factor)
+        lossCE, weight=weight, reduction=reduction, avg_factor=avg_factor
+    )
 
     if len(label.size()) > 1:
         label = torch.reshape(label, (-1, num_classes))
-        label = torch.argmax(label, dim = 1)
+        label = torch.argmax(label, dim=1)
         label = label.long()
 
-    #don't apply to background classes
+    # don't apply to background classes
     mask = label != num_classes
     if torch.sum(mask) != 0:
         label = label[mask]
         distances = distances[mask]
-     
+
         loss_a = torch.gather(distances, 1, label.view(-1, 1)).view(-1)
-        
+
         if weight != None:
             weight = weight.reshape(-1)[mask]
             loss_a *= weight
 
-        if reduction == 'mean':
+        if reduction == "mean":
             avg_factor = torch.sum(mask)
             if avg_factor is not None:
-                loss_a = loss_a.sum()/avg_factor
+                loss_a = loss_a.sum() / avg_factor
             else:
                 loss_a = torch.mean(loss_a)
         else:
@@ -75,12 +80,14 @@ def anchor_cross_entropy(distances, logits,
     else:
         loss_a = 0
 
-    return lossCE + (anchor_weight*loss_a)
+    return lossCE + (anchor_weight * loss_a)
+
 
 def _expand_onehot_labels(labels, label_weights, label_channels):
     bin_labels = labels.new_full((labels.size(0), label_channels), 0)
     inds = torch.nonzero(
-        (labels >= 0) & (labels < label_channels), as_tuple=False).squeeze()
+        (labels >= 0) & (labels < label_channels), as_tuple=False
+    ).squeeze()
     if inds.numel() > 0:
         bin_labels[inds, labels[inds]] = 1
 
@@ -88,18 +95,27 @@ def _expand_onehot_labels(labels, label_weights, label_channels):
         bin_label_weights = None
     else:
         bin_label_weights = label_weights.view(-1, 1).expand(
-            label_weights.size(0), label_channels)
+            label_weights.size(0), label_channels
+        )
 
     return bin_labels, bin_label_weights
+
 
 @LOSSES.register_module()
 class AnchorwCrossEntropyLoss(nn.Module):
 
-    def __init__(self,
-                 reduction='mean',
-                 class_weight=None,
-                 loss_weight=1.0, anchor_weight = 0.1, n_classes = 15, background_flag=False, *args, **kwargs):
-      
+    def __init__(
+        self,
+        reduction="mean",
+        class_weight=None,
+        loss_weight=1.0,
+        anchor_weight=0.1,
+        n_classes=15,
+        background_flag=False,
+        *args,
+        **kwargs
+    ):
+
         super(AnchorwCrossEntropyLoss, self).__init__()
 
         self.reduction = reduction
@@ -109,15 +125,15 @@ class AnchorwCrossEntropyLoss(nn.Module):
         self.n_classes = n_classes
         self.anchor_weight = anchor_weight
         self.background_flag = background_flag
-        #plus one to account for background class
-        anch = torch.diag(torch.ones(n_classes)*5)
+        # plus one to account for background class
+        anch = torch.diag(torch.ones(n_classes) * 5)
         anch = torch.where(anch != 0, anch, torch.Tensor([-5]))
-        self.anchors = nn.Parameter(anch, requires_grad = False).cuda()
-        
+        self.anchors = nn.Parameter(anch, requires_grad=False).cuda()
+
         self.cls_criterion = anchor_cross_entropy
 
     def euclideanDistance(self, logits):
-        #plus one to account for background clss logit
+        # plus one to account for background clss logit
         logits = logits.view(-1, self.n_classes)
         n = logits.size(0)
         m = self.anchors.size(0)
@@ -126,19 +142,19 @@ class AnchorwCrossEntropyLoss(nn.Module):
         x = logits.unsqueeze(1).expand(n, m, d)
         anchors = self.anchors.unsqueeze(0).expand(n, m, d)
 
-        dists = torch.norm(x-anchors, 2, 2)
+        dists = torch.norm(x - anchors, 2, 2)
 
         return dists
 
-
-
-    def forward(self,
-                cls_score,
-                label,
-                weight=None,
-                avg_factor=None,
-                reduction_override=None,
-                **kwargs):
+    def forward(
+        self,
+        cls_score,
+        label,
+        weight=None,
+        avg_factor=None,
+        reduction_override=None,
+        **kwargs
+    ):
         """Forward function.
 
         Args:
@@ -152,16 +168,15 @@ class AnchorwCrossEntropyLoss(nn.Module):
         Returns:
             torch.Tensor: The calculated loss
         """
-        assert reduction_override in (None, 'none', 'mean', 'sum')
-        reduction = (
-            reduction_override if reduction_override else self.reduction)
+        assert reduction_override in (None, "none", "mean", "sum")
+        reduction = reduction_override if reduction_override else self.reduction
         if self.class_weight is not None:
             class_weight = cls_score.new_tensor(
-                self.class_weight, device=cls_score.device)
+                self.class_weight, device=cls_score.device
+            )
         else:
             class_weight = None
 
-       
         distances = self.euclideanDistance(cls_score)
 
         # distances = self.euclideanDistance(cls_score[:, :-1])
@@ -172,11 +187,14 @@ class AnchorwCrossEntropyLoss(nn.Module):
             distances,
             cls_score,
             label,
-            weight = weight,
-            num_classes = self.n_classes if not self.background_flag else self.n_classes - 1,
-            anchor_weight = self.anchor_weight,
+            weight=weight,
+            num_classes=(
+                self.n_classes if not self.background_flag else self.n_classes - 1
+            ),
+            anchor_weight=self.anchor_weight,
             class_weight=class_weight,
             reduction=reduction,
             avg_factor=avg_factor,
-            **kwargs)
+            **kwargs
+        )
         return loss_cls

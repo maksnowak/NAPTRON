@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 
 class OutputHandler(ABC):
     """Base class for model output handlers."""
+
     def __init__(self):
         pass
 
@@ -18,6 +19,7 @@ class OutputHandler(ABC):
 
 class IdentityHandler(OutputHandler):
     """Identity postprocess class."""
+
     def _process(self, outputs):
         """Identity postprocess method.
 
@@ -29,4 +31,3 @@ class IdentityHandler(OutputHandler):
                 unchanged model outputs
         """
         return outputs
-

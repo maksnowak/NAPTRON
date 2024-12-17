@@ -4,6 +4,7 @@
 * Copyright (c) 2018-2023 OpenMMLab
 * Copyright (c) SafeDNN group 2023
 """
+
 from abc import ABCMeta, abstractmethod
 
 import torch
@@ -16,12 +17,7 @@ from mmdet.core.bbox.builder import BBOX_SAMPLERS
 @BBOX_SAMPLERS.register_module()
 class ODSampler(RandomSampler):
 
-    def sample(self,
-               assign_result,
-               bboxes,
-               gt_bboxes,
-               gt_labels=None,
-               **kwargs):
+    def sample(self, assign_result, bboxes, gt_bboxes, gt_labels=None, **kwargs):
         """Sample positive and negative bboxes.
 
         This is a simple implementation of bbox sampling given candidates,
@@ -58,7 +54,8 @@ class ODSampler(RandomSampler):
         if self.add_gt_as_proposals and len(gt_bboxes) > 0:
             if gt_labels is None:
                 raise ValueError(
-                    'gt_labels must be given when add_gt_as_proposals is True')
+                    "gt_labels must be given when add_gt_as_proposals is True"
+                )
             bboxes = torch.cat([gt_bboxes, bboxes], dim=0)
             assign_result.add_gt_(gt_labels)
             gt_ones = bboxes.new_ones(gt_bboxes.shape[0], dtype=torch.uint8)
@@ -66,7 +63,8 @@ class ODSampler(RandomSampler):
 
         num_expected_pos = int(self.num * self.pos_fraction)
         pos_inds = self.pos_sampler._sample_pos(
-            assign_result, num_expected_pos, bboxes=bboxes, **kwargs)
+            assign_result, num_expected_pos, bboxes=bboxes, **kwargs
+        )
         # We found that sampled indices have duplicated items occasionally.
         # (may be a bug of PyTorch)
         pos_inds = pos_inds.unique()
@@ -78,9 +76,11 @@ class ODSampler(RandomSampler):
             if num_expected_neg > neg_upper_bound:
                 num_expected_neg = neg_upper_bound
         neg_inds = self.neg_sampler._sample_neg(
-            assign_result, num_expected_neg, bboxes=bboxes, **kwargs)
+            assign_result, num_expected_neg, bboxes=bboxes, **kwargs
+        )
         neg_inds = neg_inds.unique()
 
-        sampling_result = ODSamplingResult(pos_inds, neg_inds, bboxes, gt_bboxes,
-                                           assign_result, gt_flags)
+        sampling_result = ODSamplingResult(
+            pos_inds, neg_inds, bboxes, gt_bboxes, assign_result, gt_flags
+        )
         return sampling_result

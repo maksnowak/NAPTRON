@@ -4,6 +4,7 @@
 * Copyright (c) 2018-2023 OpenMMLab
 * Copyright (c) SafeDNN group 2023
 """
+
 from mmdet.models.dense_heads import FCOSHead
 from mmdet.models import HEADS
 from mmdet.core import multi_apply, filter_scores_and_topk, select_single_mlvl
@@ -11,6 +12,7 @@ from mmcv.ops import batched_nms
 from mmcv.runner import force_fp32
 
 import torch
+
 
 @HEADS.register_module()
 class NAPTRONFCOSHead(FCOSHead):
@@ -58,7 +60,9 @@ class NAPTRONFCOSHead(FCOSHead):
             tuple: scores for each class, bbox predictions and centerness \
                 predictions of input feature maps.
         """
-        cls_score, bbox_pred, cls_feat, reg_feat, activations, shapes = self.forward_single_super(x)
+        cls_score, bbox_pred, cls_feat, reg_feat, activations, shapes = (
+            self.forward_single_super(x)
+        )
         if self.centerness_on_reg:
             centerness = self.conv_centerness(reg_feat)
         else:
@@ -77,19 +81,20 @@ class NAPTRONFCOSHead(FCOSHead):
             bbox_pred = bbox_pred.exp()
         return cls_score, bbox_pred, activations, shapes, centerness
 
-
-    @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
-    def get_bboxes(self,
-                   cls_scores,
-                   bbox_preds,
-                   activations,
-                   shapes,
-                   score_factors=None,
-                   img_metas=None,
-                   cfg=None,
-                   rescale=False,
-                   with_nms=True,
-                   **kwargs):
+    @force_fp32(apply_to=("cls_scores", "bbox_preds"))
+    def get_bboxes(
+        self,
+        cls_scores,
+        bbox_preds,
+        activations,
+        shapes,
+        score_factors=None,
+        img_metas=None,
+        cfg=None,
+        rescale=False,
+        with_nms=True,
+        **kwargs
+    ):
         """Transform network outputs of a batch into bbox results.
 
         Note: When score_factors is not None, the cls_scores are
@@ -136,9 +141,8 @@ class NAPTRONFCOSHead(FCOSHead):
 
         featmap_sizes = [cls_scores[i].shape[-2:] for i in range(num_levels)]
         mlvl_priors = self.prior_generator.grid_priors(
-            featmap_sizes,
-            dtype=cls_scores[0].dtype,
-            device=cls_scores[0].device)
+            featmap_sizes, dtype=cls_scores[0].dtype, device=cls_scores[0].device
+        )
 
         result_list = []
 
@@ -152,26 +156,36 @@ class NAPTRONFCOSHead(FCOSHead):
             else:
                 score_factor_list = [None for _ in range(num_levels)]
 
-            results = self._get_bboxes_single(cls_score_list, bbox_pred_list,
-                                              score_factor_list, activations_list, shapes[-1], mlvl_priors,
-                                              img_meta, cfg, rescale, with_nms,
-                                              **kwargs)
+            results = self._get_bboxes_single(
+                cls_score_list,
+                bbox_pred_list,
+                score_factor_list,
+                activations_list,
+                shapes[-1],
+                mlvl_priors,
+                img_meta,
+                cfg,
+                rescale,
+                with_nms,
+                **kwargs
+            )
             result_list.append(results)
         return result_list
 
-
-    def _get_bboxes_single(self,
-                           cls_score_list,
-                           bbox_pred_list,
-                           score_factor_list,
-                           activations_list,
-                           shapes,
-                           mlvl_priors,
-                           img_meta,
-                           cfg,
-                           rescale=False,
-                           with_nms=True,
-                           **kwargs):
+    def _get_bboxes_single(
+        self,
+        cls_score_list,
+        bbox_pred_list,
+        score_factor_list,
+        activations_list,
+        shapes,
+        mlvl_priors,
+        img_meta,
+        cfg,
+        rescale=False,
+        with_nms=True,
+        **kwargs
+    ):
         """Transform outputs of a single image into bbox predictions.
 
         Args:
@@ -220,8 +234,8 @@ class NAPTRONFCOSHead(FCOSHead):
             with_score_factors = True
 
         cfg = self.test_cfg if cfg is None else cfg
-        img_shape = img_meta['img_shape']
-        nms_pre = cfg.get('nms_pre', -1)
+        img_shape = img_meta["img_shape"]
+        nms_pre = cfg.get("nms_pre", -1)
 
         mlvl_bboxes = []
         mlvl_activations = []
@@ -231,18 +245,28 @@ class NAPTRONFCOSHead(FCOSHead):
             mlvl_score_factors = []
         else:
             mlvl_score_factors = None
-        for level_idx, (cls_score, bbox_pred, score_factor, priors, activations) in \
-                enumerate(zip(cls_score_list, bbox_pred_list,
-                              score_factor_list, mlvl_priors, activations_list)):
+        for level_idx, (
+            cls_score,
+            bbox_pred,
+            score_factor,
+            priors,
+            activations,
+        ) in enumerate(
+            zip(
+                cls_score_list,
+                bbox_pred_list,
+                score_factor_list,
+                mlvl_priors,
+                activations_list,
+            )
+        ):
 
             assert cls_score.size()[-2:] == bbox_pred.size()[-2:]
 
             bbox_pred = bbox_pred.permute(1, 2, 0).reshape(-1, 4)
             if with_score_factors:
-                score_factor = score_factor.permute(1, 2,
-                                                    0).reshape(-1).sigmoid()
-            cls_score = cls_score.permute(1, 2,
-                                          0).reshape(-1, self.cls_out_channels)
+                score_factor = score_factor.permute(1, 2, 0).reshape(-1).sigmoid()
+            cls_score = cls_score.permute(1, 2, 0).reshape(-1, self.cls_out_channels)
 
             activations = activations.permute(1, 2, 0).reshape(-1, activations.shape[0])
             if self.use_sigmoid_cls:
@@ -259,18 +283,17 @@ class NAPTRONFCOSHead(FCOSHead):
             # find a slight drop in performance, you can set a larger
             # `nms_pre` than before.
             results = filter_scores_and_topk(
-                scores, cfg.score_thr, nms_pre,
-                dict(bbox_pred=bbox_pred, priors=priors))
+                scores, cfg.score_thr, nms_pre, dict(bbox_pred=bbox_pred, priors=priors)
+            )
             scores, labels, keep_idxs, filtered_results = results
 
-            bbox_pred = filtered_results['bbox_pred']
-            priors = filtered_results['priors']
+            bbox_pred = filtered_results["bbox_pred"]
+            priors = filtered_results["priors"]
             activations = activations[keep_idxs]
             if with_score_factors:
                 score_factor = score_factor[keep_idxs]
 
-            bboxes = self.bbox_coder.decode(
-                priors, bbox_pred, max_shape=img_shape)
+            bboxes = self.bbox_coder.decode(priors, bbox_pred, max_shape=img_shape)
 
             mlvl_bboxes.append(bboxes)
             mlvl_scores.append(scores)
@@ -279,22 +302,34 @@ class NAPTRONFCOSHead(FCOSHead):
             if with_score_factors:
                 mlvl_score_factors.append(score_factor)
 
-        return self._bbox_post_process(mlvl_scores, mlvl_labels, mlvl_bboxes, mlvl_activations, shapes,
-                                       img_meta['scale_factor'], cfg, rescale,
-                                       with_nms, mlvl_score_factors, **kwargs)
+        return self._bbox_post_process(
+            mlvl_scores,
+            mlvl_labels,
+            mlvl_bboxes,
+            mlvl_activations,
+            shapes,
+            img_meta["scale_factor"],
+            cfg,
+            rescale,
+            with_nms,
+            mlvl_score_factors,
+            **kwargs
+        )
 
-    def _bbox_post_process(self,
-                           mlvl_scores,
-                           mlvl_labels,
-                           mlvl_bboxes,
-                           mlvl_activations,
-                           shapes,
-                           scale_factor,
-                           cfg,
-                           rescale=False,
-                           with_nms=True,
-                           mlvl_score_factors=None,
-                           **kwargs):
+    def _bbox_post_process(
+        self,
+        mlvl_scores,
+        mlvl_labels,
+        mlvl_bboxes,
+        mlvl_activations,
+        shapes,
+        scale_factor,
+        cfg,
+        rescale=False,
+        with_nms=True,
+        mlvl_score_factors=None,
+        **kwargs
+    ):
         """bbox post-processing method.
 
         The boxes would be rescaled to the original image scale and do
@@ -355,11 +390,12 @@ class NAPTRONFCOSHead(FCOSHead):
                 det_bboxes = torch.cat([mlvl_bboxes, mlvl_scores[:, None]], -1)
                 return det_bboxes, mlvl_labels, mlvl_activations, shapes
 
-            det_bboxes, keep_idxs = batched_nms(mlvl_bboxes, mlvl_scores,
-                                                mlvl_labels, cfg.nms)
-            det_bboxes = det_bboxes[:cfg.max_per_img]
-            det_labels = mlvl_labels[keep_idxs][:cfg.max_per_img]
-            det_activations = mlvl_activations[keep_idxs][:cfg.max_per_img].cpu()
+            det_bboxes, keep_idxs = batched_nms(
+                mlvl_bboxes, mlvl_scores, mlvl_labels, cfg.nms
+            )
+            det_bboxes = det_bboxes[: cfg.max_per_img]
+            det_labels = mlvl_labels[keep_idxs][: cfg.max_per_img]
+            det_activations = mlvl_activations[keep_idxs][: cfg.max_per_img].cpu()
             return det_bboxes, det_labels, det_activations, shapes
         else:
             return mlvl_bboxes, mlvl_scores, mlvl_labels

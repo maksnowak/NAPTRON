@@ -40,7 +40,7 @@ def iouCalc(boxes1, boxes2):
 
 
 def associate_train_data(args):
-    print('Associating training data')
+    print("Associating training data")
     allLogits = []
     allLabels = []
     allScores = []
@@ -57,10 +57,14 @@ def associate_train_data(args):
         trainDets = allTrainDets[tIdx]
         lenDataset = len(trainDataset)
         for imIdx in range(lenDataset):
-            imName = trainDataset.data_infos[imIdx]['filename']
+            imName = trainDataset.data_infos[imIdx]["filename"]
 
             # detData = np.asarray(trainDets[imName])
-            detData = [np.insert(c, c.shape[1], c_id, axis=1) for c_id, c in enumerate(trainDets[imIdx]) if c.shape[0]]
+            detData = [
+                np.insert(c, c.shape[1], c_id, axis=1)
+                for c_id, c in enumerate(trainDets[imIdx])
+                if c.shape[0]
+            ]
 
             # detData = np.asarray(trainDets[imIdx])
             # continue if no detections made
@@ -95,8 +99,8 @@ def associate_train_data(args):
             # 		newDetLogits[idx1, idx2] = 25
             # 	detLogits = newDetLogits
 
-            gtBoxes = gtData['bboxes']
-            gtLabels = gtData['labels']
+            gtBoxes = gtData["bboxes"]
+            gtLabels = gtData["labels"]
 
             ious = iouCalc(detBoxes, gtBoxes)
             for detIdx, guess in enumerate(detPredict):
@@ -119,18 +123,23 @@ def associate_train_data(args):
     allScores = list(allScores)
     allIoUs = list(allIoUs)
 
-    trainDict = {'logits': allLogits, 'labels': allLabels, 'scores': allScores, 'ious': allIoUs}
+    trainDict = {
+        "logits": allLogits,
+        "labels": allLabels,
+        "scores": allScores,
+        "ious": allIoUs,
+    }
 
-    save_path = args.outputs.split('.')[0] + '_associated.pkl'
+    save_path = args.outputs.split(".")[0] + "_associated.pkl"
     mmcv.dump(trainDict, save_path)
 
 
 def associate_val_data(args):
     cfg = Config.fromfile(args.config)
     testDataset = build_dataset(cfg.data.test)
-    nm = 'VAL'
-    print(f'Associating {nm} data')
-    allData = {'scores': [], 'type': [], 'logits': [], 'ious': []}
+    nm = "VAL"
+    print(f"Associating {nm} data")
+    allData = {"scores": [], "type": [], "logits": [], "ious": []}
     lenDataset = len(testDataset)
 
     testDets = mmcv.load(args.outputs)
@@ -138,7 +147,11 @@ def associate_val_data(args):
     for imIdx in tqdm.tqdm(range(lenDataset)):
         gtData = testDataset.get_ann_info(imIdx)
 
-        detData = [np.insert(c, c.shape[1], c_id, axis=1) for c_id, c in enumerate(testDets[imIdx]) if c.shape[0]]
+        detData = [
+            np.insert(c, c.shape[1], c_id, axis=1)
+            for c_id, c in enumerate(testDets[imIdx])
+            if c.shape[0]
+        ]
 
         # continue if no detections made
         if len(detData) == 0:
@@ -180,22 +193,27 @@ def associate_val_data(args):
         detLogits = detLogits[mask]
         detPredict = detPredict[mask]
 
-        allDetsIm = {'predictions': detPredict, 'scores': detScores, 'boxes': detBoxes, 'logits': detLogits}
+        allDetsIm = {
+            "predictions": detPredict,
+            "scores": detScores,
+            "boxes": detBoxes,
+            "logits": detLogits,
+        }
         # associate detections to objects
         allData = associate_detections(allData, allDetsIm, gtData)
 
-    save_path = args.outputs.split('.')[0] + '_associated.pkl'
+    save_path = args.outputs.split(".")[0] + "_associated.pkl"
     mmcv.dump(allData, save_path)
 
 
 # used to associate detections either as background, known class correctly predicted, known class incorrectly predicted, unknown class
 def associate_detections(dataHolder, dets, gt, clsCutoff=21):
-    gtBoxes = gt['bboxes']
-    gtLabels = gt['labels']
-    detPredict = dets['predictions']
-    detBoxes = dets['boxes']
-    detScores = dets['scores']
-    detLogits = dets['logits']
+    gtBoxes = gt["bboxes"]
+    gtLabels = gt["labels"]
+    detPredict = dets["predictions"]
+    detBoxes = dets["boxes"]
+    detScores = dets["scores"]
+    detLogits = dets["logits"]
 
     knownBoxes = gtBoxes[gtLabels < clsCutoff]
     knownLabels = gtLabels[gtLabels < clsCutoff]
@@ -234,17 +252,17 @@ def associate_detections(dataHolder, dets, gt, clsCutoff=21):
                     detAssociated[detIdx] = 1
 
                     gtLbl = knownLabels[iouIdx]
-                    dataHolder['ious'] += [ious[iouIdx]]
+                    dataHolder["ious"] += [ious[iouIdx]]
                     # known class was classified correctly
                     if detPredict[detIdx] == gtLbl:
-                        dataHolder['scores'] += [score]
-                        dataHolder['logits'] += [list(detLogits[detIdx])]
-                        dataHolder['type'] += [0]
+                        dataHolder["scores"] += [score]
+                        dataHolder["logits"] += [list(detLogits[detIdx])]
+                        dataHolder["type"] += [0]
                     # known class was misclassified
                     else:
-                        dataHolder['scores'] += [score]
-                        dataHolder['logits'] += [list(detLogits[detIdx])]
-                        dataHolder['type'] += [1]
+                        dataHolder["scores"] += [score]
+                        dataHolder["logits"] += [list(detLogits[detIdx])]
+                        dataHolder["type"] += [1]
                     break
                 else:
                     # doesn't have an iou greater than 0.5 with anything
@@ -256,8 +274,8 @@ def associate_detections(dataHolder, dets, gt, clsCutoff=21):
 
     ### Next, check if the detection overlaps an ignored gt known object - these detections are ignored
     # also check ignored gt known objects
-    if len(gt['bboxes_ignore']) > 0:
-        igBoxes = gt['bboxes_ignore']
+    if len(gt["bboxes_ignore"]) > 0:
+        igBoxes = gt["bboxes_ignore"]
         igIous = iouCalc(detBoxes, igBoxes)
         for idx, score in enumerate(sorted_scores):
             detIdx = sorted_idxes[idx]
@@ -299,10 +317,10 @@ def associate_detections(dataHolder, dets, gt, clsCutoff=21):
                 if ious[iouIdx] >= iouThresh:
                     newDetAssociated[detIdx] = 1
 
-                    dataHolder['scores'] += [score]
-                    dataHolder['logits'] += [list(detLogits[detIdx])]
-                    dataHolder['type'] += [2]
-                    dataHolder['ious'] += [ious[iouIdx]]
+                    dataHolder["scores"] += [score]
+                    dataHolder["logits"] += [list(detLogits[detIdx])]
+                    dataHolder["type"] += [2]
+                    dataHolder["ious"] += [ious[iouIdx]]
                     break
                 else:
                     # no overlap greater than 0.5
@@ -317,10 +335,10 @@ def associate_detections(dataHolder, dets, gt, clsCutoff=21):
     for detIdx, assoc in enumerate(detAssociated):
         if not assoc:
             score = detScores[detIdx]
-            dataHolder['scores'] += [score]
-            dataHolder['type'] += [3]
-            dataHolder['logits'] += [list(detLogits[detIdx])]
-            dataHolder['ious'] += [0]
+            dataHolder["scores"] += [score]
+            dataHolder["type"] += [3]
+            dataHolder["logits"] += [list(detLogits[detIdx])]
+            dataHolder["ious"] += [0]
             detAssociated[detIdx] = 1
 
     if np.sum(detAssociated) != len(detAssociated):
@@ -331,11 +349,10 @@ def associate_detections(dataHolder, dets, gt, clsCutoff=21):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description='Compute metrics')
-    parser.add_argument('outputs', help='model outputs')
-    parser.add_argument('config', help='test config')
-    parser.add_argument('-train', action='store_true')
+    parser = argparse.ArgumentParser(description="Compute metrics")
+    parser.add_argument("outputs", help="model outputs")
+    parser.add_argument("config", help="test config")
+    parser.add_argument("-train", action="store_true")
     args = parser.parse_args()
     return args
 
@@ -348,5 +365,5 @@ def main():
         associate_val_data(args)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

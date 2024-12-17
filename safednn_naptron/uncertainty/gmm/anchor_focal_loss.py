@@ -7,6 +7,7 @@
 * Copyright (c) 2018-2023 OpenMMLab
 * Copyright (c) SafeDNN group 2023
 """
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -16,16 +17,18 @@ from mmdet.models.losses.utils import weight_reduce_loss
 
 
 # This method is only for debugging
-def py_sigmoid_focal_loss(pred,
-                          target,
-                          distances,
-                          weight=None,
-                          gamma=2.0,
-                          alpha=0.25,
-                          reduction='mean',
-                          avg_factor=None,
-                          n_classes=20,
-                          anchor_weight=0.1):
+def py_sigmoid_focal_loss(
+    pred,
+    target,
+    distances,
+    weight=None,
+    gamma=2.0,
+    alpha=0.25,
+    reduction="mean",
+    avg_factor=None,
+    n_classes=20,
+    anchor_weight=0.1,
+):
     """PyTorch version of `Focal Loss <https://arxiv.org/abs/1708.02002>`_.
 
     Args:
@@ -45,10 +48,11 @@ def py_sigmoid_focal_loss(pred,
     pred_sigmoid = pred.sigmoid()
     target = target.type_as(pred)
     pt = (1 - pred_sigmoid) * target + pred_sigmoid * (1 - target)
-    focal_weight = (alpha * target + (1 - alpha) *
-                    (1 - target)) * pt.pow(gamma)
-    loss = F.binary_cross_entropy_with_logits(
-        pred, target, reduction='none') * focal_weight
+    focal_weight = (alpha * target + (1 - alpha) * (1 - target)) * pt.pow(gamma)
+    loss = (
+        F.binary_cross_entropy_with_logits(pred, target, reduction="none")
+        * focal_weight
+    )
     if weight is not None:
         if weight.shape != loss.shape:
             if weight.size(0) == loss.size(0):
@@ -81,7 +85,7 @@ def py_sigmoid_focal_loss(pred,
             weight = weight.reshape(-1)[mask]
             loss_a *= weight
 
-        if reduction == 'mean':
+        if reduction == "mean":
             avg_factor = torch.sum(mask)
             if avg_factor is not None:
                 loss_a = loss_a.sum() / avg_factor
@@ -95,16 +99,18 @@ def py_sigmoid_focal_loss(pred,
     return loss + (anchor_weight * loss_a)
 
 
-def py_focal_loss_with_prob(pred,
-                            target,
-                            distances,
-                            weight=None,
-                            gamma=2.0,
-                            alpha=0.25,
-                            reduction='mean',
-                            avg_factor=None,
-                            n_classes=20,
-                            anchor_weight=0.1):
+def py_focal_loss_with_prob(
+    pred,
+    target,
+    distances,
+    weight=None,
+    gamma=2.0,
+    alpha=0.25,
+    reduction="mean",
+    avg_factor=None,
+    n_classes=20,
+    anchor_weight=0.1,
+):
     """PyTorch version of `Focal Loss <https://arxiv.org/abs/1708.02002>`_.
     Different from `py_sigmoid_focal_loss`, this function accepts probability
     as input.
@@ -129,10 +135,8 @@ def py_focal_loss_with_prob(pred,
 
     target = target.type_as(pred)
     pt = (1 - pred) * target + pred * (1 - target)
-    focal_weight = (alpha * target + (1 - alpha) *
-                    (1 - target)) * pt.pow(gamma)
-    loss = F.binary_cross_entropy(
-        pred, target, reduction='none') * focal_weight
+    focal_weight = (alpha * target + (1 - alpha) * (1 - target)) * pt.pow(gamma)
+    loss = F.binary_cross_entropy(pred, target, reduction="none") * focal_weight
     if weight is not None:
         if weight.shape != loss.shape:
             if weight.size(0) == loss.size(0):
@@ -165,7 +169,7 @@ def py_focal_loss_with_prob(pred,
             weight = weight.reshape(-1)[mask]
             loss_a *= weight
 
-        if reduction == 'mean':
+        if reduction == "mean":
             avg_factor = torch.sum(mask)
             if avg_factor is not None:
                 loss_a = loss_a.sum() / avg_factor
@@ -179,16 +183,18 @@ def py_focal_loss_with_prob(pred,
     return loss + (anchor_weight * loss_a)
 
 
-def sigmoid_focal_loss(pred,
-                       target,
-                       distances,
-                       weight=None,
-                       gamma=2.0,
-                       alpha=0.25,
-                       reduction='mean',
-                       avg_factor=None,
-                       n_classes=20,
-                       anchor_weight=0.1):
+def sigmoid_focal_loss(
+    pred,
+    target,
+    distances,
+    weight=None,
+    gamma=2.0,
+    alpha=0.25,
+    reduction="mean",
+    avg_factor=None,
+    n_classes=20,
+    anchor_weight=0.1,
+):
     r"""A warpper of cuda version `Focal Loss
     <https://arxiv.org/abs/1708.02002>`_.
 
@@ -208,8 +214,9 @@ def sigmoid_focal_loss(pred,
     """
     # Function.apply does not accept keyword arguments, so the decorator
     # "weighted_loss" is not applicable
-    loss = _sigmoid_focal_loss(pred.contiguous(), target.contiguous(), gamma,
-                               alpha, None, 'none')
+    loss = _sigmoid_focal_loss(
+        pred.contiguous(), target.contiguous(), gamma, alpha, None, "none"
+    )
     if weight is not None:
         if weight.shape != loss.shape:
             if weight.size(0) == loss.size(0):
@@ -243,7 +250,7 @@ def sigmoid_focal_loss(pred,
             weight = weight.reshape(-1)[mask]
             loss_a *= weight
 
-        if reduction == 'mean':
+        if reduction == "mean":
             avg_factor = torch.sum(mask)
             if avg_factor is not None:
                 loss_a = loss_a.sum() / avg_factor
@@ -260,16 +267,23 @@ def sigmoid_focal_loss(pred,
 @LOSSES.register_module()
 class AnchorFocalLoss(nn.Module):
 
-    def __init__(self,
-                 use_sigmoid=True,
-                 gamma=2.0,
-                 alpha=0.25,
-                 reduction='mean',
-                 activated=False,
-                 class_weight=None,
-                 loss_weight=1.0, anchor_weight=0.1, n_classes=15, background_flag=False, *args, **kwargs):
+    def __init__(
+        self,
+        use_sigmoid=True,
+        gamma=2.0,
+        alpha=0.25,
+        reduction="mean",
+        activated=False,
+        class_weight=None,
+        loss_weight=1.0,
+        anchor_weight=0.1,
+        n_classes=15,
+        background_flag=False,
+        *args,
+        **kwargs
+    ):
         super(AnchorFocalLoss, self).__init__()
-        assert use_sigmoid is True, 'Only sigmoid focal loss supported now.'
+        assert use_sigmoid is True, "Only sigmoid focal loss supported now."
         self.use_sigmoid = use_sigmoid
         self.gamma = gamma
         self.alpha = alpha
@@ -303,13 +317,15 @@ class AnchorFocalLoss(nn.Module):
 
         return dists
 
-    def forward(self,
-                pred,
-                target,
-                weight=None,
-                avg_factor=None,
-                reduction_override=None,
-                **kwargs):
+    def forward(
+        self,
+        pred,
+        target,
+        weight=None,
+        avg_factor=None,
+        reduction_override=None,
+        **kwargs
+    ):
         """Forward function.
 
         Args:
@@ -326,9 +342,8 @@ class AnchorFocalLoss(nn.Module):
         Returns:
             torch.Tensor: The calculated loss
         """
-        assert reduction_override in (None, 'none', 'mean', 'sum')
-        reduction = (
-            reduction_override if reduction_override else self.reduction)
+        assert reduction_override in (None, "none", "mean", "sum")
+        reduction = reduction_override if reduction_override else self.reduction
         if self.use_sigmoid:
             if self.activated:
                 calculate_loss_func = py_focal_loss_with_prob
@@ -343,20 +358,23 @@ class AnchorFocalLoss(nn.Module):
 
             distances = self.euclideanDistance(pred)
 
-
             pred = pred.reshape(-1, pred.shape[-1])
             target = target.flatten().long()
 
-            loss_cls = self.loss_weight * calculate_loss_func(pred,
-                                                              target,
-                                                              distances,
-                                                              weight=weight,
-                                                              n_classes=self.n_classes if not self.background_flag else self.n_classes - 1,
-                                                              anchor_weight=self.anchor_weight,
-                                                              reduction=reduction,
-                                                              avg_factor=avg_factor,
-                                                              gamma=self.gamma,
-                                                              alpha=self.alpha)
+            loss_cls = self.loss_weight * calculate_loss_func(
+                pred,
+                target,
+                distances,
+                weight=weight,
+                n_classes=(
+                    self.n_classes if not self.background_flag else self.n_classes - 1
+                ),
+                anchor_weight=self.anchor_weight,
+                reduction=reduction,
+                avg_factor=avg_factor,
+                gamma=self.gamma,
+                alpha=self.alpha,
+            )
 
         else:
             raise NotImplementedError

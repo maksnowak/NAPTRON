@@ -33,7 +33,9 @@ class FullNetMonitor(object):
     def compute_hamming_distance(self, neuron_values, class_id, mean=False):
 
         mat_torch = torch.zeros(neuron_values.shape, device=neuron_values.device)
-        neuron_on_off_pattern = neuron_values.gt(mat_torch).type(torch.uint8).to(torch.device(self.device))
+        neuron_on_off_pattern = (
+            neuron_values.gt(mat_torch).type(torch.uint8).to(torch.device(self.device))
+        )
         distance = []
 
         for i in range(neuron_on_off_pattern.shape[0]):
@@ -42,13 +44,24 @@ class FullNetMonitor(object):
             for shape_id, shape in enumerate(self.layers_shapes):
                 if self.known_patterns_tensor[class_id[i]][shape_id].numel():
                     if mean:
-                        lvl = (self.known_patterns_tensor[class_id[i]][shape_id] ^ neuron_on_off_pattern[i,
-                                                                                   offset:offset + shape]).sum(
-                            dim=1).float().mean()
+                        lvl = (
+                            (
+                                self.known_patterns_tensor[class_id[i]][shape_id]
+                                ^ neuron_on_off_pattern[i, offset : offset + shape]
+                            )
+                            .sum(dim=1)
+                            .float()
+                            .mean()
+                        )
                     else:
-                        lvl = (self.known_patterns_tensor[class_id[i]][shape_id] ^ neuron_on_off_pattern[i,
-                                                                                   offset:offset + shape]).sum(
-                            dim=1).min()
+                        lvl = (
+                            (
+                                self.known_patterns_tensor[class_id[i]][shape_id]
+                                ^ neuron_on_off_pattern[i, offset : offset + shape]
+                            )
+                            .sum(dim=1)
+                            .min()
+                        )
                 else:
                     lvl = shape
                 offset += shape
@@ -63,26 +76,38 @@ class FullNetMonitor(object):
         abs_np = np.greater(neuron_values_np, mat_np).astype("uint8")
 
         mat_torch = torch.zeros(neuron_values.shape, device=neuron_values.device)
-        abs = neuron_values.gt(mat_torch).type(torch.uint8).to(torch.device(self.device))
+        abs = (
+            neuron_values.gt(mat_torch).type(torch.uint8).to(torch.device(self.device))
+        )
         for example_id in range(neuron_values.shape[0]):
             offset = 0
             for shape_id, shape in enumerate(self.layers_shapes):
-                abs_np_slice = abs_np[example_id, offset:offset + shape]
-                abs_slice = abs[example_id, offset:offset + shape]
-                if abs_np_slice.tobytes() not in self.known_patterns_set[label[example_id]][shape_id]:
+                abs_np_slice = abs_np[example_id, offset : offset + shape]
+                abs_slice = abs[example_id, offset : offset + shape]
+                if (
+                    abs_np_slice.tobytes()
+                    not in self.known_patterns_set[label[example_id]][shape_id]
+                ):
                     if self.known_patterns_tensor[label[example_id]][shape_id].numel():
                         self.known_patterns_tensor[label[example_id]][shape_id][
-                            len(self.known_patterns_set[label[example_id]][shape_id])] = \
-                            abs_slice
+                            len(self.known_patterns_set[label[example_id]][shape_id])
+                        ] = abs_slice
                     else:
-                        self.known_patterns_tensor[label[example_id]][shape_id] = torch.ones(
-                            (self.class_patterns_count[label[example_id]],) + abs_slice.shape,
-                            dtype=torch.uint8, device=abs.device)
+                        self.known_patterns_tensor[label[example_id]][shape_id] = (
+                            torch.ones(
+                                (self.class_patterns_count[label[example_id]],)
+                                + abs_slice.shape,
+                                dtype=torch.uint8,
+                                device=abs.device,
+                            )
+                        )
 
                         self.known_patterns_tensor[label[example_id]][shape_id][
-                            len(self.known_patterns_set[label[example_id]][shape_id])] = \
-                            abs_slice
-                    self.known_patterns_set[label[example_id]][shape_id].add(abs_np_slice.tobytes())
+                            len(self.known_patterns_set[label[example_id]][shape_id])
+                        ] = abs_slice
+                    self.known_patterns_set[label[example_id]][shape_id].add(
+                        abs_np_slice.tobytes()
+                    )
                 offset += shape
 
     def cut_duplicates(self):
@@ -90,5 +115,5 @@ class FullNetMonitor(object):
             for j in self.known_patterns_tensor[i]:
                 if self.known_patterns_tensor[i][j].numel():
                     self.known_patterns_tensor[i][j] = self.known_patterns_tensor[i][j][
-                                                       :len(self.known_patterns_set[i][j]),
-                                                       :]
+                        : len(self.known_patterns_set[i][j]), :
+                    ]

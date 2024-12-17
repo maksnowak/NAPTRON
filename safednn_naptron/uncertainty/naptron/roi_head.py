@@ -4,7 +4,8 @@
 * Copyright (c) 2018-2023 OpenMMLab
 * Copyright (c) SafeDNN group 2023
 """
-from mmdet.core import (bbox2roi, bbox2result)
+
+from mmdet.core import bbox2roi, bbox2result
 from mmdet.models.builder import HEADS
 from mmdet.models.roi_heads import StandardRoIHead
 
@@ -16,16 +17,18 @@ from typing import List
 @HEADS.register_module()
 class NAPTRONRoiHead(StandardRoIHead):
 
-    def __init__(self,
-                 bbox_roi_extractor=None,
-                 bbox_head=None,
-                 mask_roi_extractor=None,
-                 mask_head=None,
-                 shared_head=None,
-                 train_cfg=None,
-                 test_cfg=None,
-                 pretrained=None,
-                 init_cfg=None):
+    def __init__(
+        self,
+        bbox_roi_extractor=None,
+        bbox_head=None,
+        mask_roi_extractor=None,
+        mask_head=None,
+        shared_head=None,
+        train_cfg=None,
+        test_cfg=None,
+        pretrained=None,
+        init_cfg=None,
+    ):
         super(NAPTRONRoiHead, self).__init__(
             bbox_roi_extractor=bbox_roi_extractor,
             bbox_head=bbox_head,
@@ -35,7 +38,8 @@ class NAPTRONRoiHead(StandardRoIHead):
             train_cfg=train_cfg,
             test_cfg=test_cfg,
             pretrained=pretrained,
-            init_cfg=init_cfg)
+            init_cfg=init_cfg,
+        )
 
         assert bbox_roi_extractor is not None
         assert bbox_head is not None
@@ -47,22 +51,23 @@ class NAPTRONRoiHead(StandardRoIHead):
         """Box head forward function used in both training and testing."""
         # TODO: a more flexible way to decide which feature maps to use
         bbox_feats = self.bbox_roi_extractor(
-            x[:self.bbox_roi_extractor.num_inputs], rois)
+            x[: self.bbox_roi_extractor.num_inputs], rois
+        )
         if self.with_shared_head:
             bbox_feats = self.shared_head(bbox_feats)
 
         cls_score, bbox_pred, activations, shapes = self.bbox_head(bbox_feats)
 
         bbox_results = dict(
-            cls_score=cls_score, bbox_pred=bbox_pred, bbox_feats=bbox_feats, nap_activations=activations, nap_shapes=shapes)
+            cls_score=cls_score,
+            bbox_pred=bbox_pred,
+            bbox_feats=bbox_feats,
+            nap_activations=activations,
+            nap_shapes=shapes,
+        )
         return bbox_results
 
-    def simple_test_bboxes(self,
-                           x,
-                           img_metas,
-                           proposals,
-                           rcnn_test_cfg,
-                           rescale=False):
+    def simple_test_bboxes(self, x, img_metas, proposals, rcnn_test_cfg, rescale=False):
         """Test only det bboxes without augmentation.
 
         Args:
@@ -94,19 +99,18 @@ class NAPTRONRoiHead(StandardRoIHead):
             det_label = rois.new_zeros((0,), dtype=torch.long)
             if rcnn_test_cfg is None:
                 det_bbox = det_bbox[:, :4]
-                det_label = rois.new_zeros(
-                    (0, self.bbox_head.fc_cls.out_features))
+                det_label = rois.new_zeros((0, self.bbox_head.fc_cls.out_features))
             # There is no proposal in the whole batch
             return [det_bbox] * batch_size, [det_label] * batch_size
 
         bbox_results = self._bbox_forward(x, rois)
-        img_shapes = tuple(meta['img_shape'] for meta in img_metas)
-        scale_factors = tuple(meta['scale_factor'] for meta in img_metas)
+        img_shapes = tuple(meta["img_shape"] for meta in img_metas)
+        scale_factors = tuple(meta["scale_factor"] for meta in img_metas)
 
         # split batch bbox prediction back to each image
-        cls_score = bbox_results['cls_score']
-        bbox_pred = bbox_results['bbox_pred']
-        nap_activations = bbox_results['nap_activations']
+        cls_score = bbox_results["cls_score"]
+        bbox_pred = bbox_results["bbox_pred"]
+        nap_activations = bbox_results["nap_activations"]
         num_proposals_per_img = tuple(len(p) for p in proposals)
         rois = rois.split(num_proposals_per_img, 0)
         cls_score = cls_score.split(num_proposals_per_img, 0)
@@ -120,7 +124,8 @@ class NAPTRONRoiHead(StandardRoIHead):
                 bbox_pred = bbox_pred.split(num_proposals_per_img, 0)
             else:
                 bbox_pred = self.bbox_head.bbox_pred_split(
-                    bbox_pred, num_proposals_per_img)
+                    bbox_pred, num_proposals_per_img
+                )
         else:
             bbox_pred = (None,) * len(proposals)
 
@@ -136,7 +141,8 @@ class NAPTRONRoiHead(StandardRoIHead):
                 if rcnn_test_cfg is None:
                     det_bbox = det_bbox[:, :4]
                     det_label = rois[i].new_zeros(
-                        (0, self.bbox_head.fc_cls.out_features))
+                        (0, self.bbox_head.fc_cls.out_features)
+                    )
             else:
                 det_bbox, det_label, keep = self.bbox_head.get_bboxes(
                     rois[i],
@@ -146,7 +152,8 @@ class NAPTRONRoiHead(StandardRoIHead):
                     scale_factors[i],
                     rescale=rescale,
                     cfg=rcnn_test_cfg,
-                    ret_keep_ids=True)
+                    ret_keep_ids=True,
+                )
 
                 det_nap.append(nap_activations_split[i][keep])
 
@@ -155,12 +162,7 @@ class NAPTRONRoiHead(StandardRoIHead):
 
         return det_bboxes, det_labels, det_nap, bbox_results["nap_shapes"]
 
-    def simple_test(self,
-                    x,
-                    proposal_list,
-                    img_metas,
-                    proposals=None,
-                    rescale=False):
+    def simple_test(self, x, proposal_list, img_metas, proposals=None, rescale=False):
         """Test without augmentation.
 
         Args:
@@ -186,14 +188,14 @@ class NAPTRONRoiHead(StandardRoIHead):
             tuple[list[Tensor], list[Tensor], list[Tensor]]: The last list
                 contains neuron activation patterns of the corresponding detected bboxes.
         """
-        assert self.with_bbox, 'Bbox head must be implemented.'
+        assert self.with_bbox, "Bbox head must be implemented."
 
         det_bboxes, det_labels, det_nap, nap_shapes = self.simple_test_bboxes(
-            x, img_metas, proposal_list, self.test_cfg, rescale=rescale)
+            x, img_metas, proposal_list, self.test_cfg, rescale=rescale
+        )
 
         bbox_results = [
-            bbox2result(det_bboxes[i], det_labels[i],
-                        self.bbox_head.num_classes)
+            bbox2result(det_bboxes[i], det_labels[i], self.bbox_head.num_classes)
             for i in range(len(det_bboxes))
         ]
 
@@ -202,5 +204,6 @@ class NAPTRONRoiHead(StandardRoIHead):
 
         else:
             segm_results = self.simple_test_mask(
-                x, img_metas, det_bboxes, det_labels, rescale=rescale)
+                x, img_metas, det_bboxes, det_labels, rescale=rescale
+            )
             return list(zip(bbox_results, segm_results))

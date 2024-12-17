@@ -4,6 +4,7 @@
 * Copyright (c) 2018-2023 OpenMMLab
 * Copyright (c) SafeDNN group 2023
 """
+
 import torch
 from mmcv.ops import batched_nms
 from mmdet.core.utils import filter_scores_and_topk
@@ -14,16 +15,18 @@ from mmdet.models.dense_heads import FCOSHead
 @HEADS.register_module()
 class FCOSHeadLogits(FCOSHead):
 
-    def _get_bboxes_single(self,
-                           cls_score_list,
-                           bbox_pred_list,
-                           score_factor_list,
-                           mlvl_priors,
-                           img_meta,
-                           cfg,
-                           rescale=False,
-                           with_nms=True,
-                           **kwargs):
+    def _get_bboxes_single(
+        self,
+        cls_score_list,
+        bbox_pred_list,
+        score_factor_list,
+        mlvl_priors,
+        img_meta,
+        cfg,
+        rescale=False,
+        with_nms=True,
+        **kwargs
+    ):
         """Transform outputs of a single image into bbox predictions.
 
         Args:
@@ -72,8 +75,8 @@ class FCOSHeadLogits(FCOSHead):
             with_score_factors = True
 
         cfg = self.test_cfg if cfg is None else cfg
-        img_shape = img_meta['img_shape']
-        nms_pre = cfg.get('nms_pre', -1)
+        img_shape = img_meta["img_shape"]
+        nms_pre = cfg.get("nms_pre", -1)
 
         mlvl_bboxes = []
         mlvl_scores = []
@@ -83,18 +86,16 @@ class FCOSHeadLogits(FCOSHead):
             mlvl_score_factors = []
         else:
             mlvl_score_factors = None
-        for level_idx, (cls_score, bbox_pred, score_factor, priors) in \
-                enumerate(zip(cls_score_list, bbox_pred_list,
-                              score_factor_list, mlvl_priors)):
+        for level_idx, (cls_score, bbox_pred, score_factor, priors) in enumerate(
+            zip(cls_score_list, bbox_pred_list, score_factor_list, mlvl_priors)
+        ):
 
             assert cls_score.size()[-2:] == bbox_pred.size()[-2:]
 
             bbox_pred = bbox_pred.permute(1, 2, 0).reshape(-1, 4)
             if with_score_factors:
-                score_factor = score_factor.permute(1, 2,
-                                                    0).reshape(-1).sigmoid()
-            cls_score = cls_score.permute(1, 2,
-                                          0).reshape(-1, self.cls_out_channels)
+                score_factor = score_factor.permute(1, 2, 0).reshape(-1).sigmoid()
+            cls_score = cls_score.permute(1, 2, 0).reshape(-1, self.cls_out_channels)
             if self.use_sigmoid_cls:
                 scores = cls_score.sigmoid()
             else:
@@ -109,20 +110,19 @@ class FCOSHeadLogits(FCOSHead):
             # find a slight drop in performance, you can set a larger
             # `nms_pre` than before.
             results = filter_scores_and_topk(
-                scores, cfg.score_thr, nms_pre,
-                dict(bbox_pred=bbox_pred, priors=priors))
+                scores, cfg.score_thr, nms_pre, dict(bbox_pred=bbox_pred, priors=priors)
+            )
             scores, labels, keep_idxs, filtered_results = results
 
             cls_score = cls_score[keep_idxs]
 
-            bbox_pred = filtered_results['bbox_pred']
-            priors = filtered_results['priors']
+            bbox_pred = filtered_results["bbox_pred"]
+            priors = filtered_results["priors"]
 
             if with_score_factors:
                 score_factor = score_factor[keep_idxs]
 
-            bboxes = self.bbox_coder.decode(
-                priors, bbox_pred, max_shape=img_shape)
+            bboxes = self.bbox_coder.decode(priors, bbox_pred, max_shape=img_shape)
 
             mlvl_bboxes.append(bboxes)
             mlvl_scores.append(scores)
@@ -131,22 +131,32 @@ class FCOSHeadLogits(FCOSHead):
             if with_score_factors:
                 mlvl_score_factors.append(score_factor)
 
-        return self._bbox_post_process(mlvl_scores, mlvl_labels, mlvl_bboxes, mlvl_logits,
-                                       img_meta['scale_factor'], cfg, rescale,
-                                       with_nms, mlvl_score_factors, **kwargs)
+        return self._bbox_post_process(
+            mlvl_scores,
+            mlvl_labels,
+            mlvl_bboxes,
+            mlvl_logits,
+            img_meta["scale_factor"],
+            cfg,
+            rescale,
+            with_nms,
+            mlvl_score_factors,
+            **kwargs
+        )
 
-
-    def _bbox_post_process(self,
-                           mlvl_scores,
-                           mlvl_labels,
-                           mlvl_bboxes,
-                           mlvl_logits,
-                           scale_factor,
-                           cfg,
-                           rescale=False,
-                           with_nms=True,
-                           mlvl_score_factors=None,
-                           **kwargs):
+    def _bbox_post_process(
+        self,
+        mlvl_scores,
+        mlvl_labels,
+        mlvl_bboxes,
+        mlvl_logits,
+        scale_factor,
+        cfg,
+        rescale=False,
+        with_nms=True,
+        mlvl_score_factors=None,
+        **kwargs
+    ):
         """bbox post-processing method.
 
         The boxes would be rescaled to the original image scale and do
@@ -187,7 +197,9 @@ class FCOSHeadLogits(FCOSHead):
                 - det_labels (Tensor): Predicted labels of the corresponding \
                     box with shape [num_bboxes].
         """
-        assert len(mlvl_scores) == len(mlvl_bboxes) == len(mlvl_labels) == len(mlvl_logits)
+        assert (
+            len(mlvl_scores) == len(mlvl_bboxes) == len(mlvl_labels) == len(mlvl_logits)
+        )
 
         mlvl_bboxes = torch.cat(mlvl_bboxes)
         if rescale:
@@ -207,13 +219,13 @@ class FCOSHeadLogits(FCOSHead):
                 det_bboxes = torch.cat([mlvl_bboxes, mlvl_scores[:, None]], -1)
                 return det_bboxes, mlvl_labels
 
-            det_bboxes, keep_idxs = batched_nms(mlvl_bboxes, mlvl_scores,
-                                                mlvl_labels, cfg.nms)
-            det_bboxes = det_bboxes[:cfg.max_per_img]
-            det_labels = mlvl_labels[keep_idxs][:cfg.max_per_img]
-            det_logits = mlvl_logits[keep_idxs][:cfg.max_per_img]
+            det_bboxes, keep_idxs = batched_nms(
+                mlvl_bboxes, mlvl_scores, mlvl_labels, cfg.nms
+            )
+            det_bboxes = det_bboxes[: cfg.max_per_img]
+            det_labels = mlvl_labels[keep_idxs][: cfg.max_per_img]
+            det_logits = mlvl_logits[keep_idxs][: cfg.max_per_img]
             det_bboxes = torch.cat((det_bboxes, det_logits), 1)
             return det_bboxes, det_labels
         else:
             return mlvl_bboxes, mlvl_scores, mlvl_labels
-
