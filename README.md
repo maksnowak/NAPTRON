@@ -1,3 +1,42 @@
+# Setup
+
+## Environment
+
+You need to have [Conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/linux.html) installed.
+If CUDA is available, to work properly Naptron needs [CUDA 11.4](https://developer.nvidia.com/cuda-11-4-0-download-archive) version installed.
+
+Steps to setup Naptron development environment:
+
+1. Create new conda environment
+
+``` bash
+conda create -n naptron python=3.10
+```
+
+2. Activate newly created environment
+``` bash
+conda activate naptron
+```
+
+3. Build Naptron package
+``` bash
+python setup.py bdist_wheel
+```
+
+4. Install Naptron package to python environment
+``` bash
+pip install dist/safednn_naptron-0.0.1-py3-none-any.whl
+``` 
+
+## Dataset
+
+Download dataset using `scripts/download_coco.sh`
+
+``` bash
+mkdir <dataset-path>
+bash ./scripts/download_coco.sh <dataset-path>
+```
+
 # Paper info
 
 This repository is the official implementation of [Detecting Out-of-distribution Objects Using Neuron Activation Patterns](https://arxiv.org/abs/2307.16433)
