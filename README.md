@@ -37,6 +37,17 @@ mkdir <dataset-path>
 bash ./scripts/download_coco.sh <dataset-path>
 ```
 
+## Generate OOB bounding boxes
+
+Run the complete pipeline with `scripts/naptron/compute_uncertanity_bboxes.py` with arguments.
+
+```bash
+python ./scripts/naptron/compute_uncertanity_bboxes.py \ 
+        --train_config=config/naptron/faster_rcnn_r50_fpn_1x_voc0712_cocofmt_naptron_trainset.py \ 
+        --train=work_dirs/outputs_dump/faster_rcnn_r50_fpn_1x_voc0712_cocofmt_naptron_trainset_model_outputs.pkl \ 
+        --test=work_dirs/outputs_dump/`name of the config file that were used for generating test results`_model_outputs.pkl
+```
+
 # Paper info
 
 This repository is the official implementation of [Detecting Out-of-distribution Objects Using Neuron Activation Patterns](https://arxiv.org/abs/2307.16433)
